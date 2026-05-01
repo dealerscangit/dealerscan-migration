@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+<div class="overlay-wrapper">
+
+  <!-- Onboarding -->
+  <div id="onboarding" style="display:none">
+    <div id="ob-step-1" class="ob-step">
+      <div class="ob-logo">DS</div>
+      <div class="ob-title">Welcome to DealerScan</div>
+      <div class="ob-subtitle">Upload customer docs from Google Drive to Tekion in one click.</div>
+      <div class="ob-features">
+        <div class="ob-feature">⚡ Auto-detects customer from deal page</div>
+        <div class="ob-feature">📁 Matches Drive folder instantly</div>
+        <div class="ob-feature">📎 Drag & drop FLHSMV, VIS, extras</div>
+        <div class="ob-feature">☁️ Uploads everything to Tekion at once</div>
+      </div>
+      <button class="btn btn-primary" id="ob-next-1">Get Started</button>
+    </div>
+    <div id="ob-step-2" class="ob-step" style="display:none">
+      <div class="ob-step-num">Step 1 of 2</div>
+      <div class="ob-title">Sign in with Google</div>
+      <div class="ob-subtitle">Connect your Google account to access the Tom Gibbs Drive folder.</div>
+      <button class="btn btn-primary" id="ob-signin-btn">Sign in with Google</button>
+      <div id="ob-signin-status" class="ob-status"></div>
+    </div>
+    <div id="ob-step-3" class="ob-step" style="display:none">
+      <div class="ob-step-num">Step 2 of 2</div>
+      <div class="ob-title">Your Name</div>
+      <div class="ob-subtitle">Enter your first name exactly as it appears in your scanned folder names.</div>
+      <input class="settings-input" id="ob-name-input" type="text" placeholder="e.g. Brandon" />
+      <div class="ob-hint">
+        <span style="color:rgba(255,255,255,0.4)">{Customer} -- </span>
+        <strong style="color:#fff">{Salesperson}</strong>
+        <span style="color:rgba(255,255,255,0.4)"> -- {Date}</span>
+      </div>
+      <button class="btn btn-primary" id="ob-finish-btn">Start Using DealerScan</button>
+    </div>
+  </div>
+
+  <!-- Upload Success Splash -->
+  <div id="upload-success-screen" style="display:none">
+    <div class="cf-success-inner">
+      <div class="cf-success-icon" style="background:linear-gradient(135deg,#e94560,#c73652);box-shadow:0 6px 24px rgba(233,69,96,0.4)">✓</div>
+      <div class="cf-success-title">Uploaded to Tekion</div>
+      <div class="cf-success-name" id="uploadSuccessFolder"></div>
+      <div class="cf-success-sub" id="uploadSuccessCount"></div>
+    </div>
+  </div>
+
+  <!-- Upload Progress Screen -->
+  <div id="upload-screen" style="display:none">
+    <div class="upload-screen-inner">
+      <div class="upload-preview-wrap">
+        <div class="upload-preview-box" id="uploadPreviewBox">
+          <div class="upload-preview-placeholder" id="uploadPreviewPlaceholder">
+            <div class="upload-preview-icon">&#8613;</div>
+          </div>
+          <img class="upload-preview-img" id="uploadPreviewImg" style="display:none" />
+        </div>
+      </div>
+      <div class="upload-title">Uploading to Tekion</div>
+      <div class="upload-file-name" id="uploadFileName">Preparing...</div>
+      <div class="upload-progress-wrap">
+        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+      </div>
+      <div class="upload-count" id="uploadCount"></div>
+    </div>
+  </div>
+
+  <!-- IT Panel (hidden, triple-tap password protected) -->
+  <div id="it-screen" style="display:none">
+    <div class="screen-header">
+      <button class="back-btn" id="itBackBtn">←</button>
+      <div class="screen-title">IT Panel</div>
+    </div>
+    <div id="it-lock" class="settings-body">
+      <div class="it-lock-icon">🔐</div>
+      <div class="settings-title" style="text-align:center">IT Access Only</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.4);text-align:center;margin-bottom:16px">This panel is for system configuration and diagnostics.</p>
+      <label class="settings-label">Password</label>
+      <input class="settings-input" id="itPassword" type="password" placeholder="Enter IT password" />
+      <button class="btn btn-primary" id="itUnlockBtn">Unlock</button>
+      <div id="itError" class="admin-error" style="display:none">Incorrect password</div>
+    </div>
+    <div id="it-panel" style="display:none">
+      <div class="settings-body">
+        <div class="admin-section-title">Role Assignment</div>
+        <label class="settings-label">This Computer's Role</label>
+        <div class="role-selector">
+          <div class="role-option" data-role="salesperson">
+            <div class="role-icon">👤</div>
+            <div class="role-name">Salesperson</div>
+            <div class="role-desc">Own folders only</div>
+          </div>
+          <div class="role-option" data-role="manager">
+            <div class="role-icon">👔</div>
+            <div class="role-name">Manager</div>
+            <div class="role-desc">Full team access</div>
+          </div>
+        </div>
+
+        <div class="admin-divider"></div>
+        <div class="admin-section-title">Salesperson Settings</div>
+        <label class="settings-label">Name Override</label>
+        <input class="settings-input" id="itNameOverride" type="text" placeholder="e.g. Brandon" />
+        <div class="toggle-row">
+          <div class="toggle-label">Lock to own folders only</div>
+          <div class="toggle-switch" id="itLockToggle"><div class="toggle-knob"></div></div>
+        </div>
+
+        <div class="admin-divider"></div>
+        <div class="admin-section-title">🚀 Rollout Control</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Extension Live</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px">Show DS button on all computers</div>
+          </div>
+          <div class="toggle-switch" id="globalEnableToggle"><div class="toggle-knob"></div></div>
+        </div>
+        <label class="settings-label">Launch Message <span style="color:rgba(255,255,255,0.3)">(optional)</span></label>
+        <input class="settings-input" id="launchMessage" type="text" placeholder="e.g. DealerScan is now live!" />
+        <div class="admin-section-title" style="margin-top:4px">Per-Salesperson Access</div>
+        <div id="userToggleList" style="margin-bottom:14px">
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;padding:8px">Loading users...</div>
+        </div>
+
+        <div class="admin-divider"></div>
+        <div class="admin-section-title">Diagnostics</div>
+        <button class="btn btn-secondary" id="itTestNotifBtn" style="margin-bottom:8px">🔔 Test Notification Badge</button>
+        <button class="btn btn-secondary" id="itDebugBtn" style="margin-bottom:8px">🔍 Debug Log</button>
+        <button class="btn btn-secondary" id="itEventsBtn" style="margin-bottom:8px">📋 View Event Log</button>
+
+        <div class="admin-divider"></div>
+        <button class="btn btn-primary" id="itSaveBtn">Save Settings</button>
+        <button class="btn btn-secondary" id="itLockBtn" style="margin-top:8px">Lock IT Panel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log Screen (IT only) -->
+  <div id="event-log-screen" style="display:none">
+    <div class="screen-header">
+      <button class="back-btn" id="eventLogBackBtn">←</button>
+      <div class="screen-title">Event Log</div>
+      <button class="refresh-btn" id="eventLogRefreshBtn">↻</button>
+    </div>
+    <div class="sales-data-body" id="eventLogBody">
+      <div class="status loading" style="margin:12px">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Sales Data Screen -->
+  <div id="sales-data-screen" style="display:none">
+    <div class="screen-header">
+      <button class="back-btn" id="salesDataBackBtn">←</button>
+      <div class="screen-title">Sales Data</div>
+      <div id="salesDataTodayCount" style="font-size:11px;color:rgba(255,255,255,0.4);margin-right:4px"></div>
+      <button class="refresh-btn" id="salesDataRefreshBtn">↻</button>
+    </div>
+    <div class="sd-tab-bar">
+      <button class="sd-tab active" id="tabUploads">Uploads</button>
+    </div>
+    <div class="sales-data-body" id="salesDataBody">
+      <div class="status loading" style="margin:12px">Loading data...</div>
+    </div>
+  </div>
+
+  <!-- Create Customer Folder Screen -->
+  <div id="create-folder-screen" style="display:none">
+    <div class="screen-header">
+      <button class="back-btn" id="createFolderBackBtn">←</button>
+      <div class="screen-title">New Customer</div>
+    </div>
+    <div class="settings-body">
+      <label class="settings-label">Customer Name</label>
+      <input class="settings-input" id="cf-customer" type="text" placeholder="e.g. Williams or Marcus Williams" />
+      <div id="cfDuplicateWarn" style="display:none" class="cf-duplicate-warn"></div>
+
+      <label class="settings-label" style="margin-top:4px">Assign to Manager</label>
+      <select class="settings-select" id="cf-manager">
+        <option value="">Select manager...</option>
+      </select>
+
+      <label class="settings-label" style="margin-top:10px">Assign to Salesperson</label>
+      <select class="settings-select" id="cf-salesperson-select">
+        <option value="">Select salesperson...</option>
+      </select>
+
+      <div class="cf-preview" id="cfPreview">
+        <span style="color:rgba(255,255,255,0.4)">Preview: </span>
+        <span id="cfPreviewText" style="color:#fff">—</span>
+      </div>
+
+      <label class="settings-label">Documents <span id="cfFileCount" style="color:rgba(255,255,255,0.3)"></span></label>
+      <div class="drop-zone cf-drop-zone" id="cfDropZone">
+        <div class="drop-zone-icon">+</div>
+        <div class="drop-zone-text">Drop files here</div>
+        <div class="drop-zone-sub">FLHSMV, VIS, photos, or any docs</div>
+        <input type="file" id="cfFileInput" multiple style="display:none" />
+      </div>
+      <div class="extra-files-wrap" id="cfFilesWrap" style="display:none;margin-bottom:12px"></div>
+
+      <button class="btn btn-primary" id="createFolderBtn">Create Folder</button>
+      <div id="createFolderStatus" class="ob-status" style="text-align:center;margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- Create Folder Success Screen -->
+  <div id="create-success-screen" style="display:none">
+    <div class="cf-success-inner">
+      <div class="cf-success-icon">✓</div>
+      <div class="cf-success-title">Folder Created</div>
+      <div class="cf-success-name" id="cfSuccessName"></div>
+      <div class="cf-success-sub" id="cfSuccessSub"></div>
+    </div>
+  </div>
+
+  <!-- Folder Actions Screen -->
+  <div id="folder-actions-screen" style="display:none">
+    <div class="screen-header">
+      <button class="back-btn" id="folderActionsBackBtn">←</button>
+      <div class="screen-title" id="folderActionsTitle">Folder Options</div>
+    </div>
+    <div class="settings-body">
+      <div class="folder-action-name" id="folderActionName"></div>
+      <div class="folder-action-meta" id="folderActionMeta"></div>
+      <div class="admin-divider"></div>
+      <div class="admin-section-title">Actions</div>
+      <button class="folder-action-btn" id="faArchiveBtn">
+        <div class="fa-icon">📦</div>
+        <div><div class="fa-title">Archive Folder</div><div class="fa-desc">Renames with ARCHIVED_ prefix, removes from main list</div></div>
+      </button>
+      <button class="folder-action-btn" id="faReassignBtn">
+        <div class="fa-icon">↔️</div>
+        <div><div class="fa-title">Reassign Salesperson</div><div class="fa-desc">Rename to a different salesperson</div></div>
+      </button>
+      <button class="folder-action-btn danger" id="faDeleteBtn">
+        <div class="fa-icon">🗑️</div>
+        <div><div class="fa-title">Delete Folder</div><div class="fa-desc">Permanently delete — empty folders only</div></div>
+      </button>
+      <div id="faReassignForm" style="display:none;margin-top:14px">
+        <label class="settings-label">New Salesperson Name</label>
+        <input class="settings-input" id="faReassignName" type="text" placeholder="e.g. Keith" />
+        <button class="btn btn-primary" id="faReassignConfirm">Confirm Reassign</button>
+      </div>
+      <div id="folderActionStatus" class="ob-status" style="text-align:center;margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app-screen">
+    <div class="header">
+      <div>
+        <div class="logo">DealerScan</div>
+        <div class="subtitle" id="headerSubtitle">Drive to Tekion</div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn manager-only manager-btn" id="salesDataBtn" title="Sales Data" style="display:none">📊</button>
+        <button class="icon-btn manager-only manager-btn" id="createFolderBtn2" title="New Customer" style="display:none">＋</button>
+        <button class="icon-btn" id="refreshBtn" title="Refresh">↻</button>
+        <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
+        <button class="icon-btn" id="closeBtn" title="Close">✕</button>
+      </div>
+    </div>
+
+    <!-- v3.9: persistent banner from config.message -->
+    <div id="dsBanner" class="ds-banner" style="display:none">
+      <span class="ds-banner-icon">📢</span>
+      <span class="ds-banner-text" id="dsBannerText"></span>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings-screen" style="display:none">
+      <div class="settings-body">
+        <div class="settings-title">Settings</div>
+        <label class="settings-label">Salesperson First Name</label>
+        <input class="settings-input" id="settingName" type="text" placeholder="e.g. Brandon" />
+        <p class="settings-hint">Enter the name exactly as it appears in Drive folder names.<br>
+          <span style="color:rgba(255,255,255,0.5)">{Customer} -- <strong style="color:#fff;font-weight:600">{Salesperson}</strong> -- {Date}</span>
+        </p>
+        <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+        <button class="btn btn-secondary" id="cancelSettingsBtn" style="margin-top:8px">Cancel</button>
+        <div id="itSecretTap" style="margin-top:20px;padding:16px 0;text-align:center;cursor:default">
+          <div style="font-size:10px;color:rgba(255,255,255,0.12);letter-spacing:0.5px">DealerScan v3.10</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div id="main-screen">
+      <div id="signed-out" style="display:none">
+        <p class="hint">Sign in with Google to access your Drive folders</p>
+        <button class="sign-in-btn" id="signInBtn">Sign in with Google</button>
+      </div>
+      <div id="loading" style="display:none">
+        <div class="status loading">Loading folders...</div>
+      </div>
+      <div id="signed-in" style="display:none">
+
+        <div id="suggestedSection" style="display:none">
+          <div class="section-label">⚡ Detected Customer</div>
+          <div class="customer-name-tag" id="detectedCustomerName">—</div>
+          <div class="suggested-folder" id="suggestedFolder">
+            <div class="suggested-badge">Match</div>
+            <div class="folder-name" id="suggestedFolderName"></div>
+            <div class="folder-date" id="suggestedFolderDate"></div>
+          </div>
+        </div>
+
+        <div id="managerRecentSection" style="display:none">
+          <div class="manager-recent-card" id="managerRecentFolder">
+            <div class="manager-recent-left">
+              <div class="manager-recent-label">Most Recent</div>
+              <div class="manager-recent-name" id="managerRecentName"></div>
+              <div class="manager-recent-date" id="managerRecentDate"></div>
+            </div>
+            <div class="manager-recent-badge">NEW</div>
+          </div>
+        </div>
+
+        <!-- Search + Filter + Sort (manager only) -->
+        <div id="folderControls" class="manager-only" style="display:none">
+          <div class="folder-search-wrap">
+            <input class="folder-search" id="folderSearch" type="text" placeholder="🔍  Search folders..." />
+          </div>
+          <div class="folder-filter-row">
+            <select class="folder-filter-select" id="filterSalesperson">
+              <option value="">All Salespeople</option>
+            </select>
+            <select class="folder-filter-select" id="sortFolders">
+              <option value="date-desc">Newest</option>
+              <option value="date-asc">Oldest</option>
+              <option value="name-asc">A → Z</option>
+              <option value="name-desc">Z → A</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="dim-label" id="foldersLabel">My Folders</div>
+        <div class="folder-list" id="folderList"></div>
+
+        <!-- Deal jacket preview strip -->
+        <div id="previewStrip" style="display:none">
+          <div class="preview-strip-header">
+            <span class="preview-strip-label" id="previewStripLabel">Files in folder</span>
+          </div>
+          <div class="preview-strip-scroll" id="previewStripScroll"></div>
+        </div>
+
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-zone-icon">+</div>
+          <div class="drop-zone-text">Drop extra files here</div>
+          <div class="drop-zone-sub">FLHSMV, VIS, or any extra docs</div>
+          <input type="file" id="filePickerInput" multiple style="display:none" />
+        </div>
+
+        <div id="extraFilesList" style="display:none">
+          <div class="dim-label">Extra Files <span id="extraFilesCount" style="color:rgba(255,255,255,0.3)"></span></div>
+          <div class="extra-files-wrap" id="extraFilesWrap"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="uploadBtn" disabled>Upload to Tekion</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="statusMsg" role="status" aria-live="polite"></div>
+</div>
+<script src="overlay.js"></script>
+</body>
+</html>
