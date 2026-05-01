@@ -28,6 +28,8 @@ DealerScan-Migration/
 │   └── (populated when we hit Phase 4)
 ├── apps-script-export/               ← Code.gs and friends, ready to paste
 │   └── (populated when we hit Phase 4)
+├── architecture-questions/           ← deferred decisions awaiting Brandon
+│   └── 01-mobile-capture-path.md     ← iOS Shortcut vs PWA vs native app (raised 2026-04-30)
 └── records/                          ← things you note down as you go
     ├── new-resource-ids.md           ← all the new IDs you'll need to fill in
     └── pre-migration-inventory.md    ← state of old system before we touch anything
