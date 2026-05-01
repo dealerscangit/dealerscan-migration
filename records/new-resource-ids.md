@@ -28,22 +28,24 @@
 ## New Drive folders (under new Workspace account)
 | Resource | New ID | Status |
 |----------|--------|--------|
-| Customer parent folder | `_____` | [ ] |
-| System / Data folder | `_____` | [ ] |
-| Archive folder | `_____` | [ ] |
+| Customer parent folder | `1YOL2kFo4PG5UCDcjGH5Z62ak5mN4Jtuk` | [x] |
+| System / Data folder | `1Zb8LUDFD_MA5yD_T3d34kBgCigJj6a7B` | [x] |
+| Archive folder | `18XJxzHYfslcacGv8_drPU67GGTzDS3Xq` | [x] |
 
 ## New spreadsheet
 | Resource | New ID | Status |
 |----------|--------|--------|
-| Customer History / Data Logs | `_____` | [ ] |
+| Customer History / Data Logs | `1TYpQ_P1j1ShEwPpmFVjMxPiZ84uZ5eSitTUSfR3Tmrs` | [x] |
 
 ## New Cloud project
 - **Project name:** dealerscan-prod
-- **Project ID:** `_____`
-- **Project number:** `_____`
-- **OAuth Consent Screen status:** [ ] configured / [ ] published
-- **OAuth Client ID:** `_____`
-- **OAuth Client Secret:** _____ (do NOT commit this anywhere — store in password manager only)
+- **Project ID:** `dealerscan-prod` (no suffix — clean)
+- **Project number:** `381110617094`
+- **Organization:** dealerscanapp.com (verified — project lives under the org, not "No organization")
+- **Billing:** Active, $300 free trial credit + pay-as-you-go after 90 days
+- **OAuth Consent Screen status:** [x] Production / Unverified — External audience, App name "DealerScan", support email tgchevydocs@dealerscanapp.com, developer contact brandonbusler@gmail.com
+- **OAuth Client ID:** [ ] not yet created (Step 2.4)
+- **Vision API key:** [ ] not yet created (Step 2.5)
 
 ## New Apps Script
 - **Project name:** DealerScan Backend
@@ -52,9 +54,13 @@
 - **Vision API key (in PropertiesService):** [ ] configured (do not paste actual key here)
 
 ## Chrome Web Store
-- **Same listing or new listing?** [ ] same / [ ] new
-- **Production extension ID:** `ljfhbejbbhobkohbfflncfcdkpfkomff` (verify still ours)
-- **v3.10 submission status:** [ ] not submitted / [ ] in review / [ ] published
+- **Old listing (in suspended account):** `ljfhbejbbhobkohbfflncfcdkpfkomff` owned by `tgchevydocs@gmail.com` — INACCESSIBLE, will not be used
+- **New developer account:** `tgchevydocs@dealerscanapp.com` (registered 2026-04-30, $5 fee paid, declared Non-trader)
+- **New listing:** Will be created fresh in Phase 5/6 — extension ID will be assigned by Web Store on first upload
+- **Production extension ID:** [ ] not yet generated (Phase 5)
+- **v3.10 submission status:** [ ] not started
+
+⚠️ **Architectural impact:** Salespeople will need to install the new extension when it ships (not an auto-update). Their chrome.storage resets — name, history, all of it. Use Version B of team-announcement.md when shipping.
 
 ## Triggers configured on new Apps Script
 - [ ] `archiveFoldersOlderThanOneDay` (daily, midnight)
