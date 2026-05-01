@@ -17,10 +17,10 @@
 // ============================================================
 
 // ────────── CONSTANTS — FILL IN BEFORE DEPLOY ──────────
-const PARENT_FOLDER_ID  = "PASTE_NEW_ID_HERE_PARENT";   // DealerScan Customers
-const ARCHIVE_FOLDER_ID = "PASTE_NEW_ID_HERE_ARCHIVE";  // DealerScan Archive
-const SYSTEM_FOLDER_ID  = "PASTE_NEW_ID_HERE_SYSTEM";   // DealerScan Data
-const HISTORY_SHEET_ID  = "PASTE_NEW_ID_HERE_HISTORY";  // Customer History & Logs
+const PARENT_FOLDER_ID  = "1YOL2kFo4PG5UCDcjGH5Z62ak5mN4Jtuk";   // DealerScan Customers
+const ARCHIVE_FOLDER_ID = "18XJxzHYfslcacGv8_drPU67GGTzDS3Xq";  // DealerScan Archive
+const SYSTEM_FOLDER_ID  = "1Zb8LUDFD_MA5yD_T3d34kBgCigJj6a7B";   // DealerScan Data
+const HISTORY_SHEET_ID  = "1TYpQ_P1j1ShEwPpmFVjMxPiZ84uZ5eSitTUSfR3Tmrs";  // Customer History & Logs
 
 const HISTORY_SHEET_NAME = "CustomerHistory";
 const MAX_HISTORY = 5;
@@ -194,12 +194,14 @@ function getDashOverview(e) {
     if (sheet) {
       sheet.getDataRange().getValues().forEach(function(row) {
         if (!row[0]) return;
-        var ts = row[3] ? new Date(row[3]) : null;
-        if (ts && ts.toDateString() === today) { scansToday++; activeSP[row[0]] = true; }
+        // v3.10: skip rows where timestamp isn't a number (header row, malformed data)
+        if (typeof row[3] !== 'number') return;
+        var ts = new Date(row[3]);
+        if (ts.toDateString() === today) { scansToday++; activeSP[row[0]] = true; }
         recentScans.push({
           salesperson: row[0], customer: row[1],
           status: row[9] || row[8] || "",
-          timestamp: row[3] ? new Date(row[3]).toISOString() : ""
+          timestamp: ts.toISOString()
         });
       });
     }
@@ -677,12 +679,14 @@ function getDashOverviewData() {
     if (sheet) {
       sheet.getDataRange().getValues().forEach(function(row) {
         if (!row[0]) return;
-        var ts = row[3] ? new Date(row[3]) : null;
-        if (ts && ts.toDateString() === today) { scansToday++; activeSP[row[0]] = true; }
+        // v3.10: skip rows where timestamp isn't a number (header row, malformed data)
+        if (typeof row[3] !== 'number') return;
+        var ts = new Date(row[3]);
+        if (ts.toDateString() === today) { scansToday++; activeSP[row[0]] = true; }
         recentScans.push({
           salesperson: row[0], customer: row[1],
           status: row[9] || row[8] || "",
-          timestamp: row[3] ? new Date(row[3]).toISOString() : ""
+          timestamp: ts.toISOString()
         });
       });
     }

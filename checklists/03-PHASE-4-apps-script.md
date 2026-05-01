@@ -143,14 +143,23 @@ If you get permission errors or 500s: re-check Project Settings → GCP Project 
 ---
 
 ## Phase 4A is complete when:
-- [ ] Apps Script project created and linked to `dealerscan-prod` Cloud project
-- [ ] Vision API key in Script Properties (not in source)
-- [ ] `Code-NEW.gs` pasted with new folder IDs filled in
-- [ ] Web App deployed, URL recorded
-- [ ] Both triggers installed
-- [ ] Smoke test passes
+- [x] Apps Script project created and linked to `dealerscan-prod` Cloud project
+- [x] Vision API key in Script Properties (not in source)
+- [x] `Code-NEW.gs` pasted with new folder IDs filled in
+- [x] Web App deployed, URL recorded
+- [x] Both triggers installed
+- [x] Smoke test passes
 
-When all checked: tell Aria **"Phase 4A complete."**
+**✅ Phase 4A complete 2026-04-30 ~10:30 PM.**
+
+Smoke tests:
+- `?action=getVersion` → `1.0` ✅
+- `?action=getConfig` → empty config JSON ✅
+- `?action=getOverview` → all zeros / empty arrays ✅ (after RangeError fix for header row)
+
+**Bug found and fixed during smoke test:** ScanLog sheet has a header row I had Brandon create for human readability. Old `getDashOverview` and `getDashOverviewData` didn't filter the header (`row[0]="Salesperson"` is truthy), causing `new Date("Timestamp (ms)")` to throw RangeError. Fix: added `if (typeof row[3] !== 'number') return;` guard before constructing Date in both functions.
+
+Apps Script is now LIVE on the new Workspace account. DealerScan backend is operational.
 
 She'll do a quick code review of what's deployed (you can paste sections back to her if she asks) and we move to Phase 5 (extension update with new constants).
 

@@ -45,13 +45,22 @@
 - **Billing:** Active, $300 free trial credit + pay-as-you-go after 90 days
 - **OAuth Consent Screen status:** [x] Production / Unverified — External audience, App name "DealerScan", support email tgchevydocs@dealerscanapp.com, developer contact brandonbusler@gmail.com
 - **OAuth Client ID:** [ ] not yet created (Step 2.4)
-- **Vision API key:** [ ] not yet created (Step 2.5)
+- **Vision API key:** [x] created, restricted to Cloud Vision API only, stored in macOS Keychain as Secure Note "DealerScan Vision API Key"
+
+## ⚠️ Incident note (2026-04-30 evening)
+A first attempt at Vision API key creation resulted in Brandon pasting the live key into chat. Mitigation: key was deleted within ~5 minutes of creation, replaced with a fresh key that was handled correctly (password manager only). No evidence of misuse. Going forward:
+
+**For future API keys, OAuth secrets, tokens, or any other secret material:**
+- Aria MUST issue an explicit "DO NOT REPLY WITH THIS VALUE — paste only into your password manager" warning *before* the value is generated
+- Brandon should never paste secret values into chat, even to confirm completion. The correct confirmation phrase is "saved to password manager," nothing more.
+- If a secret is leaked into chat: delete it from the source service immediately, generate a replacement, treat the leaked value as permanently compromised.
 
 ## New Apps Script
 - **Project name:** DealerScan Backend
-- **Script ID:** `_____`
-- **Web App deployment URL:** `_____`
-- **Vision API key (in PropertiesService):** [ ] configured (do not paste actual key here)
+- **Script ID:** `1qWWyYWhNTkRheyetMr83eUaiuFh4EZezEfCMYLGM_TQj05-U4KLRVd0X`
+- **Web App deployment URL:** `https://script.google.com/macros/s/AKfycbzF13p-WRJloMRBoWiQ4h6EmR7iylkVoGxX0Y9PBpEN0RacIvfxoN_Hd15NJUSYpsQJug/exec`
+- **Vision API key (in PropertiesService):** [x] configured as Script Property `VISION_API_KEY` (value masked, only readable by code in this project)
+- **GCP Project link:** [x] linked to `dealerscan-prod` (project number `381110617094`)
 
 ## Chrome Web Store
 - **Old listing (in suspended account):** `ljfhbejbbhobkohbfflncfcdkpfkomff` owned by `tgchevydocs@gmail.com` — INACCESSIBLE, will not be used
