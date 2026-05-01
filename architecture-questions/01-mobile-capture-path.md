@@ -87,6 +87,54 @@ But **Brandon should decide based on:**
 
 ---
 
+## 2026-04-30 ~10:50 PM update — Brandon leaning PWA
+
+Brandon arrived at the PWA approach independently by asking *"couldn't we use the bookmark on home screen for iOS to create an 'app' rather than going through app development?"* — that's exactly Option C.
+
+**Confirming the mechanism for the record:**
+
+iOS "Add to Home Screen" + proper meta tags = standalone app icon that opens fullscreen, no Safari chrome, indistinguishable from native at a glance. This is what a Progressive Web App is. No App Store, no $99 Apple Dev fee, no TestFlight, no review cycle.
+
+**For DealerScan's specific use case, the critical capabilities ALL work on iOS PWAs:**
+- Camera capture via `<input type="file" accept="image/*" capture="environment">` or `getUserMedia()`
+- Upload to Apps Script via `fetch()`
+- Customer name input via standard form
+- Recent customers cached in `localStorage`
+- Google Sign-In via Google Identity Services SDK
+- Custom icon, splash screen, fullscreen mode via `apple-touch-icon`, `apple-mobile-web-app-capable`, manifest.json
+
+**The PWA limitations that exist (limited background processing, push notifications) don't apply to DealerScan's workflow** (open → scan → upload → done).
+
+**Hosting options (for future-Brandon):**
+- Cloudflare Pages — free, fast, integrates with git
+- Vercel — free tier, easy deploy
+- GitHub Pages — free, simple, public repos
+- Custom domain like `app.dealerscanapp.com` looks professional
+
+**Realistic scope for v1 PWA:**
+- Single page or 2-3 pages: customer name entry, camera, upload status
+- Reuses the existing Apps Script endpoints (createCustomerFolder, uploadPhoto)
+- Reuses the customer history sheet for autocomplete
+- No new backend needed
+
+**Estimated build time:** 1-2 weeks of focused evening work, less if Brandon has front-end help.
+
+---
+
+## Updated recommendation
+
+Brandon's leaning matches Aria's recommendation. **Option C (PWA) is now the working assumption** unless something changes. Treat this as the path forward when it's time to address Phase 8 capture-side instructions, but **don't start building yet** — finishing the migration (Phase 5/6/7) is more urgent.
+
+When ready to start the PWA build:
+1. Decide hosting (Cloudflare Pages recommended for ease + speed)
+2. Decide subdomain (suggest `app.dealerscanapp.com`)
+3. Sketch the screens (customer name → camera → upload progress → done)
+4. Build minimum viable: get one full upload flow working end-to-end before any polish
+
+This is a separate project from the migration; goes in its own folder, its own git repo, its own session focus.
+
+---
+
 ## What to do tonight
 
 **Nothing.** This is a thinking-and-deciding question, not a doing question. Document it, sleep on it, decide next session or the session after.
