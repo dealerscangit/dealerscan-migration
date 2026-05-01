@@ -161,15 +161,20 @@ Smoke tests:
 
 Apps Script is now LIVE on the new Workspace account. DealerScan backend is operational.
 
-## ⚠️ Known gap — index.html not migrated
+## ✅ Resolved 2026-04-30 ~10:55 PM — index.html gap closed by code removal
 
-`Code-NEW.gs`'s `doGet` handler returns `HtmlService.createHtmlOutputFromFile("index")` when no `?action=` is given — the in-browser DealerScan Dash. We did NOT create an `index.html` file in the new Apps Script project during Phase 4A. The bare Web App URL would currently throw "File not found: index".
+Brandon confirmed the original Apps Script never had an `index.html` — that route in `doGet` was scaffolding that was never built out. "DealerScan Dash" lives entirely in the extension's `overlay.html`, not in a separate Apps Script HTML page.
 
-**Impact:** LOW. The JSON endpoints that the extension uses are working (those are the critical path). Only the in-browser dashboard route is broken.
+**Resolution:** removed the `HtmlService.createHtmlOutputFromFile("index")` call from `doGet`. Replaced with a friendly plain-text response so anyone visiting the bare Web App URL gets:
 
-**Fix:** when convenient, paste `index.html` contents from the OLD Apps Script project into a new HTML file in the new project. Phase 4B is a natural time to do this since we'll be touching Apps Script source anyway. Tag this as **Phase 4A.5 — index.html migration** when we get to it.
+```
+DealerScan Backend
 
-If recovering `index.html` from the old project is impossible (suspended account inaccessible, no local backup), we have two options: (a) decide the in-Apps-Script HTML dashboard isn't needed because `overlay.html` in the extension provides the same functionality, or (b) rebuild it from scratch. Decision deferred.
+This is an API endpoint, not a webpage.
+Use ?action=getVersion, ?action=getConfig, ?action=getOverview, etc.
+```
+
+Code-NEW.gs updated, re-pasted into Apps Script, redeployed via Manage deployments → New version. Bare URL now serves the helpful message instead of throwing "File not found: index". Architecture is cleaner — no orphan code paths pointing at non-existent resources.
 
 She'll do a quick code review of what's deployed (you can paste sections back to her if she asks) and we move to Phase 5 (extension update with new constants).
 

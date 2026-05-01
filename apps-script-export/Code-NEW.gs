@@ -43,9 +43,16 @@ function getHistorySpreadsheet() {
 function doGet(e) {
   var action = e.parameter.action;
   if (!action) {
-    return HtmlService.createHtmlOutputFromFile("index")
-      .setTitle("DealerScan Dash")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // v3.10: removed dead HtmlService.createHtmlOutputFromFile("index") call.
+    // The original Apps Script never had an index.html — that route was scaffolding
+    // that was never built out. "DealerScan Dash" is the extension's overlay.html UI,
+    // not a separate Apps Script HTML page. Returning a helpful plain-text response
+    // so anyone hitting the bare URL knows what this is.
+    return ContentService.createTextOutput(
+      "DealerScan Backend\n\n" +
+      "This is an API endpoint, not a webpage.\n" +
+      "Use ?action=getVersion, ?action=getConfig, ?action=getOverview, etc.\n"
+    );
   }
   if (action === "createFolder")  return createCustomerFolder(e);
   if (action === "uploadPhoto")   return uploadPhoto(e);
