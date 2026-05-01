@@ -161,6 +161,16 @@ Smoke tests:
 
 Apps Script is now LIVE on the new Workspace account. DealerScan backend is operational.
 
+## ⚠️ Known gap — index.html not migrated
+
+`Code-NEW.gs`'s `doGet` handler returns `HtmlService.createHtmlOutputFromFile("index")` when no `?action=` is given — the in-browser DealerScan Dash. We did NOT create an `index.html` file in the new Apps Script project during Phase 4A. The bare Web App URL would currently throw "File not found: index".
+
+**Impact:** LOW. The JSON endpoints that the extension uses are working (those are the critical path). Only the in-browser dashboard route is broken.
+
+**Fix:** when convenient, paste `index.html` contents from the OLD Apps Script project into a new HTML file in the new project. Phase 4B is a natural time to do this since we'll be touching Apps Script source anyway. Tag this as **Phase 4A.5 — index.html migration** when we get to it.
+
+If recovering `index.html` from the old project is impossible (suspended account inaccessible, no local backup), we have two options: (a) decide the in-Apps-Script HTML dashboard isn't needed because `overlay.html` in the extension provides the same functionality, or (b) rebuild it from scratch. Decision deferred.
+
 She'll do a quick code review of what's deployed (you can paste sections back to her if she asks) and we move to Phase 5 (extension update with new constants).
 
 ---
