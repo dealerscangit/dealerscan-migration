@@ -71,7 +71,13 @@ function doGet(e) {
   if (action === "getEvents")     return getDealerScanEvents(e);
   if (action === "getStats")      return getDealerScanStats(e);
   // ── Phase 4B proxy endpoints (auth-gated) ──
-  if (action === "authPing")      return authPing(e);
+  if (action === "authPing")          return authPing(e);
+  if (action === "proxyListFolders")  return proxyListFolders(e);
+  if (action === "proxyListFiles")    return proxyListFiles(e);
+  if (action === "proxyReadFile")     return proxyReadFile(e);
+  if (action === "proxyGetFile")      return proxyGetFile(e);
+  if (action === "proxyFindFolder")   return proxyFindFolder(e);
+  if (action === "proxyReadJsonFile") return proxyReadJsonFile(e);
   return ContentService.createTextOutput("Unknown action");
 }
 
