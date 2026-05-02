@@ -70,6 +70,8 @@ function doGet(e) {
   if (action === "logEvent")      return json(logDealerScanEvent(JSON.parse(e.parameter.payload || "{}")));
   if (action === "getEvents")     return getDealerScanEvents(e);
   if (action === "getStats")      return getDealerScanStats(e);
+  // ── Phase 4B proxy endpoints (auth-gated) ──
+  if (action === "authPing")      return authPing(e);
   return ContentService.createTextOutput("Unknown action");
 }
 
