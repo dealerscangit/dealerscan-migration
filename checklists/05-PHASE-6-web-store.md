@@ -1,6 +1,7 @@
 # Phase 6 — Web Store Submission + Review
-**Estimated time:** 6A: 15 min | 6B: 5 min + 3-7 days waiting | 6C: variable | 6D: 30 min
-**Prerequisites:** Phase 5C complete (listing draft saved with all metadata)
+**Status:** Phase 6A + 6B ✅ COMPLETE | Phase 6C (rejection handling) and 6D (post-approval) remain pending Web Store reviewer outcome
+**Submitted:** 2026-05-01 ~10:18 PM EDT
+**Expected review duration:** 3-7 business days
 **Goal:** Submit v3.10 to Chrome Web Store, navigate the review, get listing approved.
 
 ---
@@ -8,6 +9,20 @@
 ## ⚠️ This phase has waiting
 
 Once you click "Submit for review," there's nothing to do for 3-7 days while Google's reviewers go through it. Don't sit and refresh — they email when they have feedback or approve. Use the time productively (Phase 4B service-account proxy implementation is a great fit for this waiting period).
+
+## Outcome of Phase 6A + 6B (2026-05-01 evening)
+
+✅ **6A.1 — Build sanity check passed:** Production zip on Web Store has real OAuth Client ID (verified by JSON parse + format check). Dev install end-to-end sign-in tested successfully against new Apps Script backend.
+
+✅ **6A.2 — Listing review passed:** Brandon walked through Store listing tab (name, summary, description, category, language, icon, 4 screenshots) with fresh eyes. No typos or contradictions found.
+
+✅ **6A.3 — Privacy match check passed:** Six cross-checks between Privacy Practices declarations and Privacy Policy doc, all matched (PII, financial, health, location, third-party transfer, creditworthiness).
+
+✅ **6A.4 — Distribution verified:** Unlisted, all regions, free.
+
+✅ **6A.5 — Publisher contact email:** brandonbusler@gmail.com entered + verified at Web Store dev account Settings level (this was caught by the "Unable to publish" dialog after first Submit attempt — fixed in ~5 min).
+
+✅ **6B — Submitted for review:** Click made 2026-05-01 ~10:18 PM EDT. Listing status changed to "Pending review."
 
 ---
 

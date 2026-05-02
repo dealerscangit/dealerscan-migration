@@ -1,22 +1,30 @@
 # Phase 5 — Extension v3.10 Source Update + Web Store First Upload
-**Estimated time:** 5A: 30 min (DONE) | 5B: 45-60 min (next session) | 5C: 30 min (next session)
-**Prerequisites:** Phases 1-4A complete, Web Store dev account registered ($5 paid, Non-trader)
-**Goal:** Get DealerScan v3.10 onto a fresh Chrome Web Store listing under the new dev account, with a working OAuth Client baked in.
+**Status:** ✅ ALL SUB-PHASES COMPLETE (5A, 5B, 5C — 2026-04-30 through 2026-05-01)
+**Goal:** Get DealerScan v3.10 onto a fresh Chrome Web Store listing under the new dev account, with a working OAuth Client baked in. **ACHIEVED.**
 
 ---
+
+## Outcome summary
+- v3.10 zip uploaded to Web Store with real production OAuth Client ID baked in
+- Production extension ID assigned: `amoidcnjjodamimhifahieakjcplohan`
+- Two OAuth Clients created (prod + dev) — see records/new-resource-ids.md for the architectural note about why two were needed
+- Listing fully drafted: name, summary, description, category, language, icon, 4 screenshots (1280×800), privacy practices (single purpose, 5 permission justifications, remote code = NO, data usage declarations, 3 certifications, privacy policy URL)
+- Distribution: Unlisted, all regions, free
+- Publisher contact email verified at dev account level
+- End-to-end sign-in tested on Dev install — works against new Apps Script backend
 
 ## ⚠️ Phase 5 is split into three sub-phases
 
 This phase is a **chicken-and-egg dance** — we can't create the OAuth Client without an extension ID, and we can't get an extension ID without uploading the zip first. The split below resolves that dance cleanly.
 
-### Phase 5A — Source prep
+### Phase 5A — Source prep ✅
 Update v3.9 source files with new Workspace constants. Bump version to 3.10. Build a zip with placeholder OAuth Client ID. **DONE 2026-04-30 evening.**
 
-### Phase 5B — First upload + OAuth Client creation
-Upload the placeholder zip to Web Store as a draft → get assigned new extension ID → create OAuth Client in Cloud Console with that ID → replace placeholder → rebuild → re-upload final.
+### Phase 5B — First upload + OAuth Client creation ✅
+Upload the placeholder zip to Web Store as a draft → get assigned new extension ID → create OAuth Client in Cloud Console with that ID → replace placeholder → rebuild → re-upload final. **DONE 2026-05-01 evening — required architectural revision (two OAuth Clients instead of one) due to 2024 Cloud Console UI restricting Item IDs to one per Client.**
 
-### Phase 5C — Listing details
-Fill in store listing copy, screenshots, category, privacy declarations. (This sets up Phase 6: actual review submission.)
+### Phase 5C — Listing details ✅
+Fill in store listing copy, screenshots, category, privacy declarations. **DONE 2026-05-01 evening.**
 
 ---
 
