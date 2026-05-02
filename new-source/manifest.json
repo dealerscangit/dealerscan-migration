@@ -45,7 +45,7 @@
     }
   ],
   "oauth2": {
-    "client_id": "PHASE_5B_PLACEHOLDER_OAUTH_CLIENT_ID",
+    "client_id": "381110617094-mpt3tn3b2nlqj10422gcqnphimbs90ik.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/drive"]
   }
 }

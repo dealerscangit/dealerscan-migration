@@ -44,7 +44,7 @@
 - **Organization:** dealerscanapp.com (verified — project lives under the org, not "No organization")
 - **Billing:** Active, $300 free trial credit + pay-as-you-go after 90 days
 - **OAuth Consent Screen status:** [x] Production / Unverified — External audience, App name "DealerScan", support email tgchevydocs@dealerscanapp.com, developer contact brandonbusler@gmail.com
-- **OAuth Client ID:** [ ] not yet created (Step 2.4)
+- **OAuth Client ID:** [x] created 2026-05-01, type Chrome Extension, bound to extension ID `amoidcnjjodamimhifahieakjcplohan`, value stored in macOS Keychain as Secure Note "DealerScan OAuth Client ID"
 - **Vision API key:** [x] created, restricted to Cloud Vision API only, stored in macOS Keychain as Secure Note "DealerScan Vision API Key"
 
 ## ⚠️ Incident note (2026-04-30 evening)
@@ -66,8 +66,8 @@ A first attempt at Vision API key creation resulted in Brandon pasting the live 
 - **Old listing (in suspended account):** `ljfhbejbbhobkohbfflncfcdkpfkomff` owned by `tgchevydocs@gmail.com` — INACCESSIBLE, will not be used
 - **New developer account:** `tgchevydocs@dealerscanapp.com` (registered 2026-04-30, $5 fee paid, declared Non-trader)
 - **New listing:** Will be created fresh in Phase 5/6 — extension ID will be assigned by Web Store on first upload
-- **Production extension ID:** [ ] not yet generated (Phase 5)
-- **v3.10 submission status:** [ ] not started
+- **Production extension ID:** `amoidcnjjodamimhifahieakjcplohan` (assigned by Chrome Web Store on first upload 2026-05-01)
+- **v3.10 submission status:** [x] uploaded as draft (placeholder OAuth client_id) — pending OAuth Client creation + rebuild + re-upload + listing details + submit
 
 ⚠️ **Architectural impact:** Salespeople will need to install the new extension when it ships (not an auto-update). Their chrome.storage resets — name, history, all of it. Use Version B of team-announcement.md when shipping.
 
