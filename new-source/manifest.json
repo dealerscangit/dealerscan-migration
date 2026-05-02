@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DealerScan",
-  "version": "3.10",
-  "description": "Upload customer documents from Google Drive to Tekion deal jacket",
+  "version": "3.11",
+  "description": "Upload customer documents from Google Drive™ to Tekion deal jacket",
   "permissions": [
     "storage",
     "identity",
