@@ -1,11 +1,29 @@
 # NEXT SESSION PICKUP — Phase 4B.4 Extension Migration
-**Last session:** 2026-05-02 ~5:30 PM – ~8:15 PM EDT
-**Wrapped because:** Aria approaching context window limit; 4B.4 needs fresh context for clean refactor
-**Branch:** `phase-4b-proxy` (pushed to GitHub)
+**Last session:** 2026-05-27 ~10:00 PM – ~11:10 PM EDT  (prior session: 2026-05-02)
+**Wrapped because:** Brandon called it for the night. The 4B.4 read+write refactor was committed & pushed earlier in the evening; the later debugging stretch surfaced two blockers (stale dev build + missing OAuth scope) — both documented below, ready to clear next session.
+**Branch:** `phase-4b-proxy` (all commits pushed to `origin/phase-4b-proxy`; working tree clean)
+
+---
+
+## 🚦 START HERE NEXT SESSION — two blockers before anything works
+
+Tonight's refactor is DONE in `new-source/` (v3.12, committed + pushed). But end-to-end folder loading still fails for TWO reasons, both verified this session:
+
+1. **⚠️ STALE DEV BUILD.** The loaded dev extension at `/Users/brandonbusler/Desktop/DealerScan-Dev/` is still **v3.10 with direct Drive calls** — it predates tonight's refactor. We spent this session debugging that stale copy. The refactored proxy code lives in `new-source/` and was never synced into the dev install folder. **Fix:** copy `new-source/` → `DealerScan-Dev/`, preserving the dev manifest (client_id `…hrsct7jd…`, name "DealerScan DEV"), then reload.
+
+2. **⚠️ MISSING OAUTH SCOPE (affects committed v3.12 too).** `manifest.json` requests only `https://www.googleapis.com/auth/drive`. The proxy's `verifyCaller_()` authenticates callers by calling `oauth2/v3/userinfo` server-side with the caller's token — which **fails on a drive-only token** (confirmed live: `oauth2/v1/userinfo 401`). So even the correct v3.12 build returns `invalid_access_token` from every proxy call until the email scope is added. **Fix:** add `userinfo.email` + `userinfo.profile` to `oauth2.scopes` in BOTH `new-source/manifest.json` (prod) and the dev build, then reload + re-consent. Both scopes are non-sensitive — no new Google verification on top of the existing `drive` restricted scope.
+
+Once both are cleared: Brandon's personal Gmail (`brandonbusler@gmail.com`) is a **bootstrap IT user** in `Auth-NEW.gs`, so it authenticates to the proxy fine; the proxy reads as the Workspace owner and returns folders regardless of which account Chrome is signed into. Three live folders are confirmed present in the customer parent and should appear.
 
 ---
 
 ## What's already done (do NOT redo)
+
+✅ **Phase 4B.4 (read) — extension READ ops routed through proxy** — commit `dd833f0` (2026-05-27 22:00). `new-source/overlay.js` + `background.js` now call `proxyFetch(...)` instead of `googleapis.com/drive` directly. Verified: `proxyListFolders` calls in `new-source/overlay.js` at lines 506/510/1148, plus a `proxyFetch` helper.
+
+✅ **Phase 4B.2-write — Drive proxy WRITE endpoints added** — commit `25d1936` (2026-05-27 22:07). New file `apps-script-export/Proxy-Writes-NEW.gs` (rename / archive / delete / createFolder / uploadFile / writeJson / appendJson). ⚠️ **Verify these are DEPLOYED live** on Apps Script next session — committed to repo ≠ deployed.
+
+✅ **Phase 4B.4+4B.5 (write) — extension WRITE ops through proxy, bumped to v3.12** — commit `4261e65` (2026-05-27 22:30). All in `new-source/`. Pushed to `origin/phase-4b-proxy`; working tree clean.
 
 ✅ **Phase 4B.1 — Auth helper deployed live**
 - File: `apps-script-export/Auth-NEW.gs` (180 lines, in repo + live on Apps Script as `Auth.gs`)
@@ -35,21 +53,29 @@
 
 ---
 
-## What's left tonight (next session pickup point)
+## What's left (next session pickup point) — ordered
 
-⏸️ **Phase 4B.3** — Smoke test SUCCESS path (deferrable; success path validates when 4B.4 e2e tests run)
+1. 🎯 **Add OAuth email scope** (blocker #2 above) — `userinfo.email` + `userinfo.profile` into `oauth2.scopes` in `new-source/manifest.json` AND the dev build. Non-sensitive; no new verification. Reload + re-consent after.
 
-🎯 **Phase 4B.4 — Extension migration (THE TASK)** — refactor 10+ direct Drive fetch sites in extension to use the proxy endpoints instead
+2. 🎯 **Sync the dev build** (blocker #1 above) — copy `new-source/` → `DealerScan-Dev/`, keeping the dev manifest (client_id `…hrsct7jd…`, name "DealerScan DEV"; apply the scope change there too). Reload at `chrome://extensions`.
 
-⏸️ **Phase 4B.5** — End-to-end upload test (the original goal of 5/2 evening's session)
+3. 🎯 **Re-consent + verify folders** — reopen popup, approve new scopes, confirm the 3 customer folders load (via proxy, read as owner). This is the exact test that's been failing.
 
-⏸️ **Phase 4B.6** — Flip Drive External Sharing OFF (final security win)
+4. ⚠️ **Verify write proxy endpoints are DEPLOYED live** on Apps Script (`Proxy-Writes-NEW.gs` committed to repo 2026-05-27, deployment unconfirmed). Smoke-test each with a token.
+
+5. ⏸️ **Phase 4B.5** — End-to-end test: upload to Tekion + exercise write ops (rename / archive / delete) through the proxy.
+
+6. ⏸️ **Phase 4B.6** — Flip Drive External Sharing OFF (final security win). ONLY after the proxy path is fully verified working.
+
+7. ⏸️ **Pre-prod hardening** — proxy reads are called via GET with `accessToken` in the URL query string. Before prod: move token to a `text/plain` POST body + add the proxy READ actions to `doPost` routing (avoids token-in-URL logging + Apps Script CORS-preflight quirks). Apply the scope change to the prod build before the Web Store update.
 
 ---
 
-## Phase 4B.4 — Detailed pickup
+## Phase 4B.4 — Detailed pickup (✅ REFACTOR COMPLETE — retained as reference)
 
-### Files that need refactoring
+> **Status update 2026-05-27:** the refactor described below is DONE and committed (`dd833f0`, `4261e65`). The listed call sites were converted to `proxyFetch(...)` in `new-source/`. This section is kept as a reference map of call-site → proxy endpoint — useful for the e2e test (4B.5) and the pre-prod hardening pass. **Do NOT re-refactor.** The remaining work is the scope fix + dev-build sync (see "START HERE" at top), not the refactor itself.
+
+### Files that were refactored (now using proxyFetch)
 
 `/Users/brandonbusler/Desktop/DealerScan-Migration/new-source/background.js` — fetch sites at approximately lines 34-38, 42-45, 75-78, 104-107, 113-116, 144-148, 161-164, 173-176, 192-196
 
@@ -169,3 +195,7 @@ Brandon will signal stops. Push for ship when momentum is good. Each phase = cle
 3. **Don't skip the session-end ritual.** Brandon caught Aria trying to skip it; full protocol matters.
 4. **Always-ask before secret generation.** Vision API key was leaked once 4/30; never again. Wait for "saved to password manager" confirmation.
 5. **Push back honestly when you sense risk.** Aria pushed back on Brandon's "push through 4B.4" once context was constrained; Brandon agreed to wrap. That partnership move was the right call.
+
+6. **Reconcile the loaded build against repo HEAD at session start.** This session spent real time debugging the dev extension's "No folders found" while looking at the STALE `DealerScan-Dev/` copy (v3.10, direct Drive calls) — the refactor was already committed in `new-source/` (v3.12). A quick `git log` + a diff of the loaded dev folder vs `new-source/` up front would have caught it immediately.
+
+7. **`DealerScan-Dev/` is a COPY of `new-source/`, not the source — and they drift.** The dev install folder must be re-synced from `new-source/` after every refactor (preserving the dev manifest). Treat "did I sync the dev folder?" as a standing checklist item before testing dev.
