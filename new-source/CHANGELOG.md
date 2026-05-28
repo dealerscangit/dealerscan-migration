@@ -2,7 +2,7 @@
 **Build date:** 2026-05-27 (refactor) / 2026-05-28 (OAuth scope fix)
 **Source folder:** /Users/brandonbusler/Desktop/DealerScan-Migration/new-source/
 **Type:** Phase 4B proxy migration. Security/architecture change. No new user-facing features.
-**Status:** Code complete + backend deployed live. In-browser end-to-end verification PENDING (next session).
+**Status:** Code complete, backend deployed live, verified in-browser (folders load, IT screen, multi-file upload). Prod zip built (`DealerScan-3.12.zip`). Chrome Web Store submission in progress 2026-05-28.
 
 ## Why this release exists
 
@@ -16,6 +16,11 @@ Customer folders in the Workspace Drive are owned by `tgchevydocs@dealerscanapp.
 - Response-shape aliasing: proxy returns `createdAt`; aliased to `createdTime` so existing `filterFolders`/`renderFolders` keep working unchanged.
 - `manifest.json`: added `userinfo.email` + `userinfo.profile` OAuth scopes. **Required** — the proxy's `verifyCaller_()` authenticates callers by calling Google's `userinfo` endpoint server-side with the caller's token; a drive-only token returns 401 there, so without these scopes every proxy call fails `invalid_access_token`. Both scopes are non-sensitive (no added Google verification on top of the existing `drive` restricted scope). Also fixes the extension's own `autoDetectName`/role resolution, which silently 401'd before.
 - `manifest.json`: version 3.10 → 3.12 (3.11 was a trademark-fix branch, not merged into this line).
+- **Fix:** removed a duplicate `const APPS_SCRIPT_URL` in `overlay.js` (the refactor added a second declaration; two top-level `const`s of the same name is a parse-time SyntaxError that blanked the entire popup). Kept the original at line 6.
+- **Perf:** `uploadToDrive` no longer calls `proxyListFiles` twice and no longer reads/uploads files in a sequential `await` loop — Drive reads and extra-file uploads now run in parallel via `Promise.all`, with dedup filenames pre-computed in order so naming/Tekion-injection behavior is unchanged. Big improvement on multi-file uploads.
+
+**Backend/config data (not extension code):**
+- Created `_DealerScan_Config.json` in the system folder (it was missing in the new Workspace, so no one resolved as IT/manager). `itUsers` = `brandonbusler@gmail.com`; `managers` = the four PWA managers. NOTE: this duplicates role data the PWA keeps in `_DealerScan_Users.json` — see follow-up to consolidate.
 
 **Backend changes (Apps Script — deployed live, verified 2026-05-28):**
 - `Auth.gs` (`verifyCaller_`, `withAuth_`, bootstrap allowlist incl. `brandonbusler@gmail.com` as IT) — Phase 4B.1.

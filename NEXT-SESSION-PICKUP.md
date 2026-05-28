@@ -1,25 +1,30 @@
 # NEXT SESSION PICKUP — Phase 4B.4 Extension Migration
-**Last session:** 2026-05-27 ~10:00 PM – ~11:10 PM EDT  (prior session: 2026-05-02)
-**Wrapped because:** Brandon called it for the night. The 4B.4 read+write refactor was committed & pushed earlier in the evening; the later debugging stretch surfaced two blockers (stale dev build + missing OAuth scope) — both documented below, ready to clear next session.
+**Last updated:** 2026-05-28 ~12:15 PM EDT (prior sessions: 2026-05-27 PM, 2026-05-02)
+**Status:** v3.12 verified working in-browser by Brandon; prod zip built; Chrome Web Store submission in progress. Remaining: monitor review, then Phase 4B.6 (flip external sharing off) once live + confirmed.
 **Branch:** `phase-4b-proxy` (all commits pushed to `origin/phase-4b-proxy`; working tree clean)
 
 ---
 
-## 🚦 START HERE — file-level blockers RESOLVED; only in-browser steps remain
+## 🚦 START HERE — v3.12 working & built; in PUBLISHING
 
-**Update 2026-05-28 (morning, Brandon at work):** Both blockers below were fixed at the file level. The dev build is synced to v3.12 and both manifests now carry the required scopes. Backend deployment was independently verified live. **The only work left is in Chrome — Claude can't do these; Brandon does them when free.**
+**Update 2026-05-28 (~12:15 PM):** Dev build v3.12 was tested in-browser by Brandon — folders load, the IT/dev screen opens, and multi-file upload works (and is faster). Prod zip built and verified. Brandon is submitting to the Chrome Web Store now. What remains is the publish review and the final security flip — see "What's left" below.
 
 ### ✅ Done 2026-05-28 (file-level, all committed / backed up)
 - **Stale dev build → SYNCED.** All 6 code files copied `new-source/` → `DealerScan-Dev/` (now byte-identical; dev `overlay.js` has the 16 `proxyFetch` sites). Old dev folder backed up to `~/Desktop/DealerScan-Dev-BACKUP-20260528-102959/`. Dev manifest rebuilt: name "DealerScan DEV", v3.12, dev client_id `…hrsct7jd…`, new scopes. Dev extension ID unchanged (folder path untouched → `ejppggjjphcmnnhnbminobdglcalngmo` stable).
 - **Missing OAuth scope → ADDED** to BOTH `new-source/manifest.json` (prod) and the dev manifest: `userinfo.email` + `userinfo.profile`. Committed `1e4a807` + CHANGELOG v3.12 entry.
 - **Write proxy endpoints → CONFIRMED DEPLOYED LIVE.** Unauthenticated smoke test of the live `/exec` URL: `authPing`, `proxyListFolders`, `proxyRenameFolder` all return `{ok:false,error:"missing_access_token"}`; nonsense action returns `Unknown action`. So the live deployment includes tonight's write code and the auth gate works.
 - **Refactor audited:** zero remaining direct `googleapis.com/drive` calls; `proxyFetch` correct (token in query = no CORS preflight; distinguishable `code:"auth"` error; `loadFolders` refresh-and-retry works); `createdAt→createdTime` aliasing intact.
+- **Blank-popup bug FIXED** — duplicate `const APPS_SCRIPT_URL` (line 6 AND line 34) in overlay.js caused a parse-time SyntaxError → whole popup rendered blank. Removed the line-34 dup, kept line 6. Verified both JS files parse via JavaScriptCore. Commit `035c0c7`. (Lesson: this only surfaced once the code actually ran in-browser; static checks missed it. `node`/jsc syntax check is now part of the routine.)
+- **`_DealerScan_Config.json` CREATED** in the system folder (it was MISSING in the new Workspace → background.js couldn't resolve anyone as IT → the dev screen wouldn't open for anyone). Contents: `managers` = the 4 PWA managers (bryant.tgc, buslertgc, Keh200tl, wgibbstgc @gmail.com), `itUsers` = `brandonbusler@gmail.com`, `enabled` true. File id `16F_wxS0JGe2qdIjqPTlF-dZPnLjgHKWH`. background.js `pollConfig` runs on reload + every 30s and resolves role from this file.
+- **Upload sped up** — `uploadToDrive` was calling `proxyListFiles` twice and reading Drive files / uploading extras sequentially (each = a serial Apps Script round-trip). Now reuses the already-fetched list and runs all reads + uploads in parallel via `Promise.all`; dedup filenames pre-computed in original order so naming/injection behavior is unchanged. Commit `8c665b6`.
+- **Prod zip BUILT + verified** — `~/Desktop/DealerScan-Migration/DealerScan-3.12.zip` (46K, 12 files). Manifest inside = PROD (name "DealerScan", v3.12, client_id `…mpt3…`, 3 scopes). Both fixes present in the packaged overlay.js. Docs / build.sh / .git / .DS_Store all excluded.
+- **In-browser verified by Brandon:** folders load, IT/dev screen opens (3-tap), multi-file upload works and is faster.
 
-### ⏳ Left for Brandon — IN-BROWSER ONLY (≈3 min)
-1. `chrome://extensions` → **DealerScan DEV** → click reload (↻). It should now read **v3.12**.
-2. Open the popup on a Tekion deal page. It will re-prompt OAuth consent (new scopes) — **approve it.** (Account doesn't matter: your Gmail is a bootstrap IT user; the proxy reads as the Workspace owner.)
-3. Confirm the 3 customer folders load (Terry/Bob/Test — confirmed present in the parent). If they do: blockers cleared, move to 4B.5 e2e test.
-   - If still empty: open popup console, run `chrome.storage.local.get(null,(d)=>console.log(JSON.stringify(d,null,2)))` and check the Network tab for the `proxyListFolders` call's JSON response — paste both to Claude.
+### ⏳ What's left
+1. **Chrome Web Store review** — Brandon submitting v3.12 now (supersedes the pending v3.10). Pre-submit checklist: (a) verify the prod OAuth consent screen for client `…mpt3…` lists `userinfo.email` + `userinfo.profile`; (b) update the Web Store data-use disclosures to mention email/profile access (not just Drive); (c) expect existing users to get a one-time re-consent prompt because scopes expanded.
+2. **Phase 4B.6 — flip Drive external sharing OFF.** The final security win and the whole point of the proxy migration. Do this ONLY after the published version is confirmed pulling folders for a real salesperson — it's the hard-to-undo step.
+3. **Follow-up (non-blocking): consolidate role source.** The extension reads roles from `Config.json` (managers/itUsers) while the PWA reads `Users.json` (per-user role). They match today but WILL drift when someone changes roles in the PWA. Recommend changing background.js to read `Users.json` directly so there's one source of truth, then retire the Config.json role lists.
+4. **Follow-up (non-blocking): pre-prod hardening.** Move the proxy access token out of the URL query string into a `text/plain` POST body (and route the proxy READ actions via `doPost`). Avoids token-in-URL logging + Apps Script CORS-preflight quirks. Requires an Apps Script redeploy; safe to defer.
 
 ---
 
@@ -27,7 +32,7 @@
 
 ✅ **Phase 4B.4 (read) — extension READ ops routed through proxy** — commit `dd833f0` (2026-05-27 22:00). `new-source/overlay.js` + `background.js` now call `proxyFetch(...)` instead of `googleapis.com/drive` directly. Verified: `proxyListFolders` calls in `new-source/overlay.js` at lines 506/510/1148, plus a `proxyFetch` helper.
 
-✅ **Phase 4B.2-write — Drive proxy WRITE endpoints added** — commit `25d1936` (2026-05-27 22:07). New file `apps-script-export/Proxy-Writes-NEW.gs` (rename / archive / delete / createFolder / uploadFile / writeJson / appendJson). ⚠️ **Verify these are DEPLOYED live** on Apps Script next session — committed to repo ≠ deployed.
+✅ **Phase 4B.2-write — Drive proxy WRITE endpoints added** — commit `25d1936` (2026-05-27 22:07). New file `apps-script-export/Proxy-Writes-NEW.gs` (rename / archive / delete / createFolder / uploadFile / writeJson / appendJson). ✅ **CONFIRMED DEPLOYED LIVE 2026-05-28** via unauthenticated smoke test.
 
 ✅ **Phase 4B.4+4B.5 (write) — extension WRITE ops through proxy, bumped to v3.12** — commit `4261e65` (2026-05-27 22:30). All in `new-source/`. Pushed to `origin/phase-4b-proxy`; working tree clean.
 
@@ -59,21 +64,17 @@
 
 ---
 
-## What's left (next session pickup point) — ordered
+## What's left — see "⏳ What's left" at the top
 
-1. 🎯 **Add OAuth email scope** (blocker #2 above) — `userinfo.email` + `userinfo.profile` into `oauth2.scopes` in `new-source/manifest.json` AND the dev build. Non-sensitive; no new verification. Reload + re-consent after.
+> This section is superseded. Items 1–5 below were all COMPLETED 2026-05-28 (scope added, dev synced, folders verified, write endpoints confirmed deployed, e2e tested by Brandon). The only remaining items are the **Web Store review**, **Phase 4B.6 (flip external sharing off)**, and two non-blocking follow-ups — all detailed in the "⏳ What's left" block near the top of this doc. Kept here only so the historical task order is legible.
 
-2. 🎯 **Sync the dev build** (blocker #1 above) — copy `new-source/` → `DealerScan-Dev/`, keeping the dev manifest (client_id `…hrsct7jd…`, name "DealerScan DEV"; apply the scope change there too). Reload at `chrome://extensions`.
-
-3. 🎯 **Re-consent + verify folders** — reopen popup, approve new scopes, confirm the 3 customer folders load (via proxy, read as owner). This is the exact test that's been failing.
-
-4. ⚠️ **Verify write proxy endpoints are DEPLOYED live** on Apps Script (`Proxy-Writes-NEW.gs` committed to repo 2026-05-27, deployment unconfirmed). Smoke-test each with a token.
-
-5. ⏸️ **Phase 4B.5** — End-to-end test: upload to Tekion + exercise write ops (rename / archive / delete) through the proxy.
-
-6. ⏸️ **Phase 4B.6** — Flip Drive External Sharing OFF (final security win). ONLY after the proxy path is fully verified working.
-
-7. ⏸️ **Pre-prod hardening** — proxy reads are called via GET with `accessToken` in the URL query string. Before prod: move token to a `text/plain` POST body + add the proxy READ actions to `doPost` routing (avoids token-in-URL logging + Apps Script CORS-preflight quirks). Apply the scope change to the prod build before the Web Store update.
+1. ✅ ~~Add OAuth email scope~~ — done, commit `1e4a807`.
+2. ✅ ~~Sync the dev build~~ — done; old build backed up.
+3. ✅ ~~Re-consent + verify folders~~ — folders confirmed loading.
+4. ✅ ~~Verify write proxy endpoints deployed~~ — confirmed live via smoke test.
+5. ✅ ~~Phase 4B.5 e2e test~~ — Brandon verified upload + IT screen in-browser.
+6. ⏸️ **Phase 4B.6** — Flip Drive External Sharing OFF (final security win). ONLY after the published version is confirmed working for a real salesperson.
+7. ⏸️ **Pre-prod hardening** — move token from URL query → POST body + add proxy READ actions to `doPost`. Deferred.
 
 ---
 
