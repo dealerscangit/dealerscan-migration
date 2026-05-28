@@ -120,25 +120,18 @@ async function writeConfig(config) {
   try {
     const token = await getToken();
     if (!token) return;
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${CONFIG_FILE_NAME}'+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await search.json();
-    const blob = new Blob([JSON.stringify(config)], { type: "application/json" });
-    if (data.files && data.files.length > 0) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${data.files[0].id}?uploadType=media`, {
-        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: blob
-      });
-    } else {
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify({ name: CONFIG_FILE_NAME, parents: [SYSTEM_FOLDER_ID] })], { type: "application/json" }));
-      form.append("file", blob);
-      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
-      });
-    }
-    chrome.storage.local.set({ dsConfig: config, dsConfigFileId: null, dsConfigModified: null });
+    // Single proxy call replaces the search + upload-or-patch dance.
+    // proxyWriteJsonFile handles both create and update internally and is
+    // scoped to the system folder, so no parent ID needs to be passed.
+    // Use POST so the JSON content body bypasses URL length limits.
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set("action", "proxyWriteJsonFile");
+    url.searchParams.set("accessToken", token);
+    url.searchParams.set("fileName", CONFIG_FILE_NAME);
+    const body = new FormData();
+    body.append("content", JSON.stringify(config));
+    await fetch(url.toString(), { method: "POST", body });
+    chrome.storage.local.set({ dsConfig: config, dsConfigModified: null });
     chrome.tabs.query({ url: "https://app.tekioncloud.com/*" }, (tabs) => {
       tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, { action: "configUpdated", config }).catch(() => {}));
     });
@@ -149,36 +142,19 @@ async function writeEventLog(event) {
   try {
     const token = await getToken();
     if (!token) return;
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${EVENTS_FILE_NAME}'+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const searchData = await search.json();
-    let log = { events: [] };
-    let fileId = null;
-    if (searchData.files && searchData.files.length > 0) {
-      fileId = searchData.files[0].id;
-      try {
-        const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
-        log = await content.json();
-      } catch (e) { log = { events: [] }; }
-    }
-    log.events = log.events || [];
-    log.events.push({ ...event, id: Date.now().toString(36), timestamp: new Date().toISOString() });
-    if (log.events.length > 500) log.events = log.events.slice(-500);
-    const blob = new Blob([JSON.stringify(log)], { type: "application/json" });
-    if (fileId) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: blob
-      });
-    } else {
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify({ name: EVENTS_FILE_NAME, parents: [SYSTEM_FOLDER_ID] })], { type: "application/json" }));
-      form.append("file", blob);
-      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
-      });
-    }
+    // Atomic append via proxy — eliminates the read-modify-write race
+    // where two concurrent writes could overwrite each other. Backend
+    // does the read+append+cap+write server-side in one operation.
+    const entry = { ...event, id: Date.now().toString(36), timestamp: new Date().toISOString() };
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set("action", "proxyAppendJsonEntry");
+    url.searchParams.set("accessToken", token);
+    url.searchParams.set("fileName", EVENTS_FILE_NAME);
+    url.searchParams.set("arrayKey", "events");
+    url.searchParams.set("maxLength", "500");
+    const body = new FormData();
+    body.append("entry", JSON.stringify(entry));
+    await fetch(url.toString(), { method: "POST", body });
   } catch (e) {}
 }
 

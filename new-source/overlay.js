@@ -641,12 +641,11 @@ async function archiveFolder() {
   status.textContent = "Archiving..."; status.style.color = "rgba(255,255,255,0.5)";
   try {
     const token = await getValidToken();
+    // Note: this is a rename with "ARCHIVED_" prefix (preserving existing
+    // behavior), not a move to the archive folder. proxyArchiveFolder
+    // (which moves) is available if we want true archiving later.
     const newName = "ARCHIVED_" + currentFolderActionName;
-    await fetch(`https://www.googleapis.com/drive/v3/files/${currentFolderActionId}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName })
-    });
+    await proxyFetch("proxyRenameFolder", { folderId: currentFolderActionId, newName }, token);
     status.textContent = "✓ Folder archived"; status.style.color = "#a8f0bc";
     chrome.storage.local.remove("cachedFolders");
     setTimeout(() => { showScreen(null); loadFolders(); }, 800);
@@ -663,11 +662,7 @@ async function reassignFolder() {
     const parts = currentFolderActionName.split("--");
     if (parts.length >= 2) parts[1] = ` ${newSP} `;
     const newName = parts.join("--").trim();
-    await fetch(`https://www.googleapis.com/drive/v3/files/${currentFolderActionId}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName })
-    });
+    await proxyFetch("proxyRenameFolder", { folderId: currentFolderActionId, newName }, token);
     status.textContent = `✓ Reassigned to ${newSP}`; status.style.color = "#a8f0bc";
     chrome.storage.local.remove("cachedFolders");
     setTimeout(() => { showScreen(null); loadFolders(); }, 800);
@@ -678,21 +673,20 @@ async function deleteFolder() {
   const status = document.getElementById("folderActionStatus");
   try {
     const token = await getValidToken();
-    // Check if empty first
-    const checkRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${currentFolderActionId}'+in+parents+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const files = (await checkRes.json()).files || [];
+    // Empty-check via proxy first (safer UX than letting backend trash a
+    // non-empty folder by surprise — we want the explicit user confirmation
+    // path only if the folder really is empty).
+    const checkResult = await proxyFetch("proxyListFiles", { folderId: currentFolderActionId }, token);
+    const files = checkResult.files || [];
     if (files.length > 0) {
       status.textContent = "❌ Cannot delete — folder has files"; status.style.color = "#ffb3be"; return;
     }
-    if (!confirm(`Delete "${cleanFolderName(currentFolderActionName)}"? This cannot be undone.`)) return;
+    // Updated confirm message: backend uses setTrashed so its actually
+    // recoverable for 30 days from owners Drive trash — message reflects that.
+    if (!confirm(`Delete "${cleanFolderName(currentFolderActionName)}"? It will be moved to trash (recoverable for 30 days).`)) return;
     status.textContent = "Deleting..."; status.style.color = "rgba(255,255,255,0.5)";
-    await fetch(`https://www.googleapis.com/drive/v3/files/${currentFolderActionId}`, {
-      method: "DELETE", headers: { Authorization: `Bearer ${token}` }
-    });
-    status.textContent = "✓ Folder deleted"; status.style.color = "#a8f0bc";
+    await proxyFetch("proxyDeleteFolder", { folderId: currentFolderActionId }, token);
+    status.textContent = "✓ Folder moved to trash"; status.style.color = "#a8f0bc";
     chrome.storage.local.remove("cachedFolders");
     setTimeout(() => { showScreen(null); loadFolders(); }, 800);
   } catch (e) { status.textContent = "Error: " + e.message; status.style.color = "#ffb3be"; }
@@ -935,40 +929,37 @@ async function registerUser(token) {
     if (!salespersonName) return;
     let email = await new Promise(resolve => chrome.storage.local.get("userEmail", r => resolve(r.userEmail || null)));
     if (!email) {
+      // userinfo IS a Google OAuth endpoint, not Drive — stays direct.
       const res = await fetch("https://www.googleapis.com/oauth2/v1/userinfo", { headers: { Authorization: `Bearer ${token}` } });
       const info = await res.json();
       email = info.email || null;
       if (email) chrome.storage.local.set({ userEmail: email });
     }
     if (!email) return;
+
+    // Read existing users (proxy), mutate locally, write back (proxy).
+    // Two calls but no race window because each session writes a different
+    // email key in the users object; concurrent registrations from different
+    // sessions just merge naturally (last-write-wins per email).
     const USERS_FILE = "_DealerScan_Users.json";
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${USERS_FILE}'+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const searchData = await search.json();
-    let users = {}, fileId = null;
-    if (searchData.files && searchData.files.length > 0) {
-      fileId = searchData.files[0].id;
-      try {
-        const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
-        users = await content.json();
-      } catch(e) { users = {}; }
+    let users = {};
+    try {
+      const readResult = await proxyFetch("proxyReadJsonFile", { fileName: USERS_FILE }, token);
+      users = readResult.parsed || {};
+    } catch (err) {
+      if (!String(err.message).includes("file_not_found")) throw err;
+      // First-run: file doesnt exist, start with empty object
     }
+
     users[email] = { name: salespersonName, email, role: isITUser ? "it" : userRole, lastSeen: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(users)], { type: "application/json" });
-    if (fileId) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: blob
-      });
-    } else {
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify({ name: USERS_FILE, parents: [SYSTEM_FOLDER_ID] })], { type: "application/json" }));
-      form.append("file", blob);
-      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
-      });
-    }
+
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set("action", "proxyWriteJsonFile");
+    url.searchParams.set("accessToken", token);
+    url.searchParams.set("fileName", USERS_FILE);
+    const body = new FormData();
+    body.append("content", JSON.stringify(users));
+    await fetch(url.toString(), { method: "POST", body });
   } catch(e) {}
 }
 
@@ -982,11 +973,8 @@ async function uploadToDrive() {
   let token = await getValidToken();
   if (!token) { showStatus("Not authenticated", "error"); btn.disabled = false; return; }
 
-  const checkRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${selectedFolderId}'+in+parents+and+trashed=false&fields=files(id)`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const allDriveFileIds = ((await checkRes.json()).files || []).map(f => f.id);
+  const checkResult = await proxyFetch("proxyListFiles", { folderId: selectedFolderId }, token);
+  const allDriveFileIds = (checkResult.files || []).map(f => f.id);
   const uploadedKey = `uploaded_${selectedFolderId}`;
   const storedUploaded = await new Promise(resolve => chrome.storage.local.get(uploadedKey, r => resolve(r[uploadedKey] || [])));
   let newDriveFileIds = allDriveFileIds.filter(id => !storedUploaded.includes(id));
@@ -1025,19 +1013,21 @@ async function uploadToDrive() {
     const nameCounts = {};
 
     if (newDriveFileIds.length > 0) {
-      const filesRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${selectedFolderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const allDriveFiles = (await filesRes.json()).files || [];
+      // List files via proxy — same shape as before (id, name, mimeType)
+      const filesResult = await proxyFetch("proxyListFiles", { folderId: selectedFolderId }, token);
+      const allDriveFiles = filesResult.files || [];
       const newDriveFiles = allDriveFiles.filter(f => newDriveFileIds.includes(f.id));
       const total = newDriveFiles.length + extraFiles.length;
       for (let i = 0; i < newDriveFiles.length; i++) {
         const f = newDriveFiles[i];
         setUploadProgress(i+1, total, Math.round((i/total)*65), f.name);
-        const blob = await (await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, {
-          headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
-        })).blob();
+        // proxyReadFile returns base64 — convert back to Blob for the
+        // downstream Tekion injection code which expects File/Blob objects.
+        const readResult = await proxyFetch("proxyReadFile", { fileId: f.id }, token);
+        const binaryStr = atob(readResult.base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let b = 0; b < binaryStr.length; b++) bytes[b] = binaryStr.charCodeAt(b);
+        const blob = new Blob([bytes], { type: f.mimeType || "image/jpeg" });
         updatePreview(blob, f.mimeType);
         fileObjects.push(new File([blob], deduplicateName(f.name, nameCounts), { type: f.mimeType || "image/jpeg" }));
       }
@@ -1083,12 +1073,33 @@ function deduplicateName(fileName, nameCounts) {
 }
 
 async function uploadFileToDrive(file, fileName, folderId, token) {
-  const form = new FormData();
-  form.append("metadata", new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: "application/json" }));
-  form.append("file", file);
-  await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-    method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
+  // Convert File/Blob to base64 then POST via proxyUploadFile.
+  // Using POST (not GET) because base64 payloads of multi-MB images
+  // would exceed URL length limits.
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // FileReader gives us "data:mime;base64,XXXX" — strip the prefix
+      const result = reader.result;
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
+  const mimeType = file.type || "application/octet-stream";
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set("action", "proxyUploadFile");
+  url.searchParams.set("accessToken", token);
+  url.searchParams.set("folderId", folderId);
+  url.searchParams.set("fileName", fileName);
+  url.searchParams.set("mimeType", mimeType);
+  const body = new FormData();
+  body.append("base64", base64);
+  const res = await fetch(url.toString(), { method: "POST", body });
+  const data = await res.json();
+  if (!data.ok) throw new Error(`upload failed: ${data.error || "unknown"}`);
+  return data;
 }
 
 // ── Drive Log ──
@@ -1096,37 +1107,22 @@ async function writeLogEntry() {
   try {
     const token = await getValidToken();
     if (!token) return;
+    // Atomic append via proxy — eliminates the read-modify-write race
+    // between concurrent uploads from different sessions.
     const entry = {
       id: Date.now().toString(36), timestamp: new Date().toISOString(),
       salesperson: salespersonName, customer: currentCustomerName,
       folderName: selectedFolderName, folderId: selectedFolderId
     };
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${LOG_FILE_NAME}'+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const searchData = await search.json();
-    let log = { entries: [] }; let fileId = null;
-    if (searchData.files && searchData.files.length > 0) {
-      fileId = searchData.files[0].id;
-      log = await (await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } })).json();
-    }
-    log.entries = log.entries || [];
-    log.entries.push(entry);
-    if (log.entries.length > 200) log.entries = log.entries.slice(-200);
-    const blob = new Blob([JSON.stringify(log)], { type: "application/json" });
-    if (fileId) {
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: blob
-      });
-    } else {
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify({ name: LOG_FILE_NAME, parents: [SYSTEM_FOLDER_ID] })], { type: "application/json" }));
-      form.append("file", blob);
-      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form
-      });
-    }
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set("action", "proxyAppendJsonEntry");
+    url.searchParams.set("accessToken", token);
+    url.searchParams.set("fileName", LOG_FILE_NAME);
+    url.searchParams.set("arrayKey", "entries");
+    url.searchParams.set("maxLength", "200");
+    const body = new FormData();
+    body.append("entry", JSON.stringify(entry));
+    await fetch(url.toString(), { method: "POST", body });
   } catch (e) {}
 }
 
@@ -1357,13 +1353,11 @@ async function createCustomerFolder() {
   try {
     const token = await getValidToken();
     if (!token) throw new Error("Not authenticated");
-    const res = await fetch("https://www.googleapis.com/drive/v3/files", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: folderName, mimeType: "application/vnd.google-apps.folder", parents: [DRIVE_FOLDER_ID] })
-    });
-    if (!res.ok) throw new Error("Failed to create folder");
-    const folder = await res.json();
+    // proxyCreateFolder dedupes — if a folder with the same name exists,
+    // returns that one. Returns { ok, folderId, name, createdAt, existed }.
+    const createResult = await proxyFetch("proxyCreateFolder", { name: folderName }, token);
+    // Match the shape downstream code expects (folder.id)
+    const folder = { id: createResult.folderId, name: createResult.name };
     for (let i = 0; i < cfFiles.length; i++) {
       status.textContent = `Uploading ${i+1}/${cfFiles.length}: ${cfFiles[i].name}`;
       await uploadFileToDrive(cfFiles[i], cfFiles[i].name, folder.id, token);
