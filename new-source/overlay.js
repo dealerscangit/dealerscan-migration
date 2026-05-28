@@ -27,11 +27,11 @@ const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzF13p-WRJloMR
 //   On failure: throws Error with backend message
 //
 // WRITE operations (createFolder, renameFolder, deleteFolder, upload)
-// are NOT yet routed through the proxy — they still use direct Drive
-// API. Will be moved in a follow-up commit once write proxy endpoints
-// exist on the backend.
+// are ALSO routed through the proxy (proxyCreateFolder / proxyRenameFolder /
+// proxyDeleteFolder / proxyUploadFile). Uploads use POST (FormData) for
+// large base64 payloads; the rest use GET via proxyFetch.
+// APPS_SCRIPT_URL is declared once at the top of this file (see line 6).
 // ─────────────────────────────────────────────────────────────
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzF13p-WRJloMRBoWiQ4h6EmR7iylkVoGxX0Y9PBpEN0RacIvfxoN_Hd15NJUSYpsQJug/exec";
 
 async function proxyFetch(action, params, token) {
   const url = new URL(APPS_SCRIPT_URL);
