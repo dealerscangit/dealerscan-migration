@@ -5,15 +5,21 @@
 
 ---
 
-## 🚦 START HERE NEXT SESSION — two blockers before anything works
+## 🚦 START HERE — file-level blockers RESOLVED; only in-browser steps remain
 
-Tonight's refactor is DONE in `new-source/` (v3.12, committed + pushed). But end-to-end folder loading still fails for TWO reasons, both verified this session:
+**Update 2026-05-28 (morning, Brandon at work):** Both blockers below were fixed at the file level. The dev build is synced to v3.12 and both manifests now carry the required scopes. Backend deployment was independently verified live. **The only work left is in Chrome — Claude can't do these; Brandon does them when free.**
 
-1. **⚠️ STALE DEV BUILD.** The loaded dev extension at `/Users/brandonbusler/Desktop/DealerScan-Dev/` is still **v3.10 with direct Drive calls** — it predates tonight's refactor. We spent this session debugging that stale copy. The refactored proxy code lives in `new-source/` and was never synced into the dev install folder. **Fix:** copy `new-source/` → `DealerScan-Dev/`, preserving the dev manifest (client_id `…hrsct7jd…`, name "DealerScan DEV"), then reload.
+### ✅ Done 2026-05-28 (file-level, all committed / backed up)
+- **Stale dev build → SYNCED.** All 6 code files copied `new-source/` → `DealerScan-Dev/` (now byte-identical; dev `overlay.js` has the 16 `proxyFetch` sites). Old dev folder backed up to `~/Desktop/DealerScan-Dev-BACKUP-20260528-102959/`. Dev manifest rebuilt: name "DealerScan DEV", v3.12, dev client_id `…hrsct7jd…`, new scopes. Dev extension ID unchanged (folder path untouched → `ejppggjjphcmnnhnbminobdglcalngmo` stable).
+- **Missing OAuth scope → ADDED** to BOTH `new-source/manifest.json` (prod) and the dev manifest: `userinfo.email` + `userinfo.profile`. Committed `1e4a807` + CHANGELOG v3.12 entry.
+- **Write proxy endpoints → CONFIRMED DEPLOYED LIVE.** Unauthenticated smoke test of the live `/exec` URL: `authPing`, `proxyListFolders`, `proxyRenameFolder` all return `{ok:false,error:"missing_access_token"}`; nonsense action returns `Unknown action`. So the live deployment includes tonight's write code and the auth gate works.
+- **Refactor audited:** zero remaining direct `googleapis.com/drive` calls; `proxyFetch` correct (token in query = no CORS preflight; distinguishable `code:"auth"` error; `loadFolders` refresh-and-retry works); `createdAt→createdTime` aliasing intact.
 
-2. **⚠️ MISSING OAUTH SCOPE (affects committed v3.12 too).** `manifest.json` requests only `https://www.googleapis.com/auth/drive`. The proxy's `verifyCaller_()` authenticates callers by calling `oauth2/v3/userinfo` server-side with the caller's token — which **fails on a drive-only token** (confirmed live: `oauth2/v1/userinfo 401`). So even the correct v3.12 build returns `invalid_access_token` from every proxy call until the email scope is added. **Fix:** add `userinfo.email` + `userinfo.profile` to `oauth2.scopes` in BOTH `new-source/manifest.json` (prod) and the dev build, then reload + re-consent. Both scopes are non-sensitive — no new Google verification on top of the existing `drive` restricted scope.
-
-Once both are cleared: Brandon's personal Gmail (`brandonbusler@gmail.com`) is a **bootstrap IT user** in `Auth-NEW.gs`, so it authenticates to the proxy fine; the proxy reads as the Workspace owner and returns folders regardless of which account Chrome is signed into. Three live folders are confirmed present in the customer parent and should appear.
+### ⏳ Left for Brandon — IN-BROWSER ONLY (≈3 min)
+1. `chrome://extensions` → **DealerScan DEV** → click reload (↻). It should now read **v3.12**.
+2. Open the popup on a Tekion deal page. It will re-prompt OAuth consent (new scopes) — **approve it.** (Account doesn't matter: your Gmail is a bootstrap IT user; the proxy reads as the Workspace owner.)
+3. Confirm the 3 customer folders load (Terry/Bob/Test — confirmed present in the parent). If they do: blockers cleared, move to 4B.5 e2e test.
+   - If still empty: open popup console, run `chrome.storage.local.get(null,(d)=>console.log(JSON.stringify(d,null,2)))` and check the Network tab for the `proxyListFolders` call's JSON response — paste both to Claude.
 
 ---
 
