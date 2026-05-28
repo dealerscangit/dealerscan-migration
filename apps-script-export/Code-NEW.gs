@@ -78,6 +78,16 @@ function doGet(e) {
   if (action === "proxyGetFile")      return proxyGetFile(e);
   if (action === "proxyFindFolder")   return proxyFindFolder(e);
   if (action === "proxyReadJsonFile") return proxyReadJsonFile(e);
+
+  // Phase 4B.2-write proxy endpoints (added 2026-05-27)
+  if (action === "proxyRenameFolder")    return proxyRenameFolder(e);
+  if (action === "proxyArchiveFolder")   return proxyArchiveFolder(e);
+  if (action === "proxyDeleteFolder")    return proxyDeleteFolder(e);
+  if (action === "proxyCreateFolder")    return proxyCreateFolder(e);
+  if (action === "proxyUploadFile")      return proxyUploadFile(e);
+  if (action === "proxyWriteJsonFile")   return proxyWriteJsonFile(e);
+  if (action === "proxyAppendJsonEntry") return proxyAppendJsonEntry(e);
+
   return ContentService.createTextOutput("Unknown action");
 }
 
@@ -94,6 +104,18 @@ function doPost(e) {
   if (action === "uploadPhoto") return uploadPhoto(e);
   if (action === "logUpload")   return json(logUpload(data));
   if (action === "saveConfig")  return saveDashConfigPost(e);
+
+  // Phase 4B proxy endpoints accessible via POST so large payloads
+  // (especially proxyUploadFile with multi-MB base64) bypass URL
+  // length limits. Auth + scope validation lives inside each handler.
+  if (action === "proxyRenameFolder")    return proxyRenameFolder(e);
+  if (action === "proxyArchiveFolder")   return proxyArchiveFolder(e);
+  if (action === "proxyDeleteFolder")    return proxyDeleteFolder(e);
+  if (action === "proxyCreateFolder")    return proxyCreateFolder(e);
+  if (action === "proxyUploadFile")      return proxyUploadFile(e);
+  if (action === "proxyWriteJsonFile")   return proxyWriteJsonFile(e);
+  if (action === "proxyAppendJsonEntry") return proxyAppendJsonEntry(e);
+
   return ContentService.createTextOutput("Unknown action");
 }
 
