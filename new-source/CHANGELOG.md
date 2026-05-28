@@ -1,3 +1,40 @@
+# DealerScan v3.12 Changelog
+**Build date:** 2026-05-27 (refactor) / 2026-05-28 (OAuth scope fix)
+**Source folder:** /Users/brandonbusler/Desktop/DealerScan-Migration/new-source/
+**Type:** Phase 4B proxy migration. Security/architecture change. No new user-facing features.
+**Status:** Code complete + backend deployed live. In-browser end-to-end verification PENDING (next session).
+
+## Why this release exists
+
+Customer folders in the Workspace Drive are owned by `tgchevydocs@dealerscanapp.com` and shared with no one else. The pre-4B extension made Drive calls *directly as the signed-in user*, so a salesperson (external Gmail) could only ever see folders explicitly shared to them — which doesn't scale and forced external folder sharing to stay ON. v3.12 routes every Drive operation through an Apps Script proxy that executes *as the Workspace owner*, so the extension works regardless of which account the user signs in with, and external sharing can finally be turned off (Phase 4B.6).
+
+## What changed in v3.12
+
+**Code changes (in this extension):**
+- `overlay.js` + `background.js`: all direct `googleapis.com/drive` read AND write calls replaced with `proxyFetch(action, params, token)` calls to the Apps Script proxy (22 call sites total: 16 overlay, 6 background). Verified zero remaining direct Drive data calls.
+- `proxyFetch` helper added to both files: sends the OAuth access token as a query param (avoids a CORS preflight), follows the Apps Script 302 redirect, and throws a distinguishable `code:"auth"` error so callers can refresh the token and retry once. `loadFolders` implements that one-shot refresh-and-retry.
+- Response-shape aliasing: proxy returns `createdAt`; aliased to `createdTime` so existing `filterFolders`/`renderFolders` keep working unchanged.
+- `manifest.json`: added `userinfo.email` + `userinfo.profile` OAuth scopes. **Required** — the proxy's `verifyCaller_()` authenticates callers by calling Google's `userinfo` endpoint server-side with the caller's token; a drive-only token returns 401 there, so without these scopes every proxy call fails `invalid_access_token`. Both scopes are non-sensitive (no added Google verification on top of the existing `drive` restricted scope). Also fixes the extension's own `autoDetectName`/role resolution, which silently 401'd before.
+- `manifest.json`: version 3.10 → 3.12 (3.11 was a trademark-fix branch, not merged into this line).
+
+**Backend changes (Apps Script — deployed live, verified 2026-05-28):**
+- `Auth.gs` (`verifyCaller_`, `withAuth_`, bootstrap allowlist incl. `brandonbusler@gmail.com` as IT) — Phase 4B.1.
+- `Proxy.gs` — 6 read endpoints (proxyListFolders/Files/ReadFile/GetFile/FindFolder/ReadJsonFile) — Phase 4B.2.
+- `Proxy-Writes.gs` — write endpoints (rename/archive/delete/createFolder/uploadFile/writeJson/appendJson) — Phase 4B.2-write. Confirmed deployed live via unauthenticated smoke test (returns `missing_access_token`, not `Unknown action`).
+
+## What did NOT change
+
+- Tekion injection / upload-to-deal-jacket DOM flow — unchanged (not a Drive call).
+- Dash UI, re-upload override, friendly errors, all prior v3.9/v3.10 features — preserved.
+- `userinfo` calls remain direct to Google (identity endpoint, not Drive) — correct by design.
+
+## Known follow-ups (not blocking, tracked in NEXT-SESSION-PICKUP.md)
+
+- Pre-prod hardening: move access token from URL query param into a `text/plain` POST body and add the proxy READ actions to `doPost` routing (avoids token-in-URL logging + Apps Script preflight quirks). Requires an Apps Script redeploy; deferred until the GET path is verified working end-to-end.
+- Apply the same OAuth scope addition to the prod Web Store build before the next submission.
+
+---
+
 # DealerScan v3.10 Changelog
 **Build date:** 2026-04-30
 **Source folder:** /Users/brandonbusler/Desktop/DealerScan-Migration/new-source/
