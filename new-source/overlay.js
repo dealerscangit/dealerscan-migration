@@ -6,6 +6,56 @@ const LOG_FILE_NAME    = "_DealerScan_Log.json";
 const APPS_SCRIPT_URL  = "https://script.google.com/macros/s/AKfycbzF13p-WRJloMRBoWiQ4h6EmR7iylkVoGxX0Y9PBpEN0RacIvfxoN_Hd15NJUSYpsQJug/exec";
 
 // ── Event logging ──
+
+// ─────────────────────────────────────────────────────────────
+// Phase 4B.4: Drive proxy helper. Routes all Drive READS through
+// the Apps Script backend so we don't need direct user-by-user
+// folder sharing. Backend gates calls via withAuth_ + allowlist.
+//
+// Endpoint mapping (read-only, set by 4B.2):
+//   proxyListFolders   ?parentId=X         -> {folders: [{id,name,createdAt,modifiedAt}]}
+//   proxyListFiles     ?folderId=X         -> {files: [{id,name,mimeType,size,modifiedAt}]}
+//   proxyReadFile      ?fileId=X           -> {base64, name, mimeType, size}
+//   proxyGetFile       ?fileId=X           -> {name, mimeType, size, createdAt, modifiedAt}
+//   proxyFindFolder    ?parentId=X&name=N  -> {found, folder?:{id,name}}
+//   proxyReadJsonFile  ?fileName=F         -> {parsed:Object, modifiedAt}
+//                                             (system folder only)
+//
+// All proxy calls require ?accessToken=<chrome.identity_token>.
+// Returns:
+//   On success: parsed object with ok:true
+//   On failure: throws Error with backend message
+//
+// WRITE operations (createFolder, renameFolder, deleteFolder, upload)
+// are NOT yet routed through the proxy — they still use direct Drive
+// API. Will be moved in a follow-up commit once write proxy endpoints
+// exist on the backend.
+// ─────────────────────────────────────────────────────────────
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzF13p-WRJloMRBoWiQ4h6EmR7iylkVoGxX0Y9PBpEN0RacIvfxoN_Hd15NJUSYpsQJug/exec";
+
+async function proxyFetch(action, params, token) {
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set("action", action);
+  url.searchParams.set("accessToken", token);
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== null && v !== undefined) url.searchParams.set(k, String(v));
+  }
+  const res = await fetch(url.toString(), { method: "GET" });
+  if (!res.ok) throw new Error(`proxy HTTP ${res.status} (${action})`);
+  const data = await res.json();
+  if (!data.ok) {
+    const msg = data.error || "unknown_proxy_error";
+    // Auth failures throw a distinguishable error so callers can refresh token
+    if (msg === "invalid_access_token" || msg === "missing_access_token") {
+      const e = new Error("proxy_auth_failed: " + msg);
+      e.code = "auth";
+      throw e;
+    }
+    throw new Error(`proxy ${action}: ${msg}`);
+  }
+  return data;
+}
+
 function logEvent(type, details = {}) {
   const event = { type, salesperson: salespersonName, timestamp: new Date().toISOString(), ...details };
   try { chrome.runtime.sendMessage({ action: "writeEvent", event }); } catch (e) {}
@@ -448,18 +498,23 @@ async function loadFolders() {
       document.getElementById("signed-out").style.display = "block";
       return;
     }
-    let res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&orderBy=createdTime+desc&pageSize=100&fields=files(id,name,createdTime)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (res.status === 401) {
-      token = await refreshToken();
-      res = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&orderBy=createdTime+desc&pageSize=100&fields=files(id,name,createdTime)`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    // Proxy fetch with one auth retry. If proxy says token is invalid
+    // (which can happen if it expired between proxy validation calls),
+    // refresh the token and retry once before giving up.
+    let result;
+    try {
+      result = await proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token);
+    } catch (err) {
+      if (err.code === "auth") {
+        token = await refreshToken();
+        result = await proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token);
+      } else {
+        throw err;
+      }
     }
-    const folders = (await res.json()).files || [];
+    // Alias createdAt -> createdTime so downstream filterFolders/renderFolders
+    // (which expect Drives wire shape) keep working unchanged.
+    const folders = (result.folders || []).map(f => ({ ...f, createdTime: f.createdAt }));
     chrome.storage.local.set({ cachedFolders: folders });
     document.getElementById("loading").style.display = "none";
     document.getElementById("signed-in").style.display = "block";
@@ -543,21 +598,17 @@ async function loadFolderPreview(folderId) {
   try {
     const token = await getValidToken();
     if (!token) { strip.style.display = "none"; return; }
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,thumbnailLink)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const files = (await res.json()).files || [];
+    // Proxy returns {files: [{id,name,mimeType,size,modifiedAt}]} — note that
+    // the proxy does NOT return thumbnailLink. Without thumbnails we render
+    // a generic icon for every file. Acceptable tradeoff for security:
+    // sending thumbnailLink would require a fresh token round-trip anyway
+    // since thumbnail URLs need auth.
+    const result = await proxyFetch("proxyListFiles", { folderId }, token);
+    const files = result.files || [];
     if (files.length === 0) { strip.style.display = "none"; return; }
 
     label.textContent = `${files.length} file${files.length !== 1 ? "s" : ""} in folder`;
     scroll.innerHTML = files.map(f => {
-      if (f.mimeType && f.mimeType.startsWith("image/") && f.thumbnailLink) {
-        return `<div class="preview-thumb" title="${f.name}">
-          <img src="${f.thumbnailLink}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" />
-          <div class="preview-thumb-name">${f.name.replace(/\.[^.]+$/,"")}</div>
-        </div>`;
-      }
       const icon = f.mimeType === "application/pdf" ? "📄" : f.mimeType?.includes("image") ? "🖼️" : "📎";
       return `<div class="preview-thumb" title="${f.name}">
         <div class="preview-thumb-icon">${icon}</div>
@@ -1087,16 +1138,22 @@ async function loadSalesData() {
     const token = await getValidToken();
     if (!token) { body.innerHTML = '<div class="status error" style="margin:12px">Not authenticated</div>'; return; }
     const today = new Date().toDateString();
-    const [logRes, foldersRes] = await Promise.all([
-      fetch(`https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${LOG_FILE_NAME}'+and+trashed=false&fields=files(id)`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&orderBy=createdTime+desc&pageSize=100&fields=files(id,name,createdTime)`, { headers: { Authorization: `Bearer ${token}` } })
+    // Parallel fetches via proxy:
+    //   - Sales log (system JSON file)
+    //   - Customer folders list (used to compute "no docs yet")
+    const [logResult, foldersResult] = await Promise.all([
+      proxyFetch("proxyReadJsonFile", { fileName: LOG_FILE_NAME }, token).catch(err => {
+        // If log file doesn't exist yet, treat as empty — proxy returns
+        // file_not_found which we swallow here so first-run users
+        // dont see an error.
+        if (String(err.message).includes("file_not_found")) return { parsed: { entries: [] } };
+        throw err;
+      }),
+      proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token),
     ]);
-    const logSearch = await logRes.json();
-    const allFolders = (await foldersRes.json()).files || [];
-    let entries = [];
-    if (logSearch.files && logSearch.files.length > 0) {
-      entries = (await (await fetch(`https://www.googleapis.com/drive/v3/files/${logSearch.files[0].id}?alt=media`, { headers: { Authorization: `Bearer ${token}` } })).json()).entries || [];
-    }
+    const entries = (logResult.parsed && logResult.parsed.entries) || [];
+    // Alias createdAt -> createdTime so the render fn keeps working
+    const allFolders = (foldersResult.folders || []).map(f => ({ ...f, createdTime: f.createdAt }));
     const todayCount = entries.filter(e => new Date(e.timestamp).toDateString() === today).length;
     document.getElementById("salesDataTodayCount").textContent = `${todayCount} today`;
     renderSalesData(entries, allFolders);
@@ -1167,14 +1224,15 @@ async function loadEventsData() {
   try {
     const token = await getValidToken();
     if (!token) { body.innerHTML = '<div class="status error" style="margin:12px">Not authenticated</div>'; return; }
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='_DealerScan_Events.json'+and+trashed=false&fields=files(id)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const searchData = await search.json();
+    // Single proxy call replaces the previous search+read pattern.
+    // Swallow file_not_found so first-run users see the empty state
+    // instead of an error.
     let events = [];
-    if (searchData.files && searchData.files.length > 0) {
-      events = (await (await fetch(`https://www.googleapis.com/drive/v3/files/${searchData.files[0].id}?alt=media`, { headers: { Authorization: `Bearer ${token}` } })).json()).events || [];
+    try {
+      const result = await proxyFetch("proxyReadJsonFile", { fileName: "_DealerScan_Events.json" }, token);
+      events = (result.parsed && result.parsed.events) || [];
+    } catch (err) {
+      if (!String(err.message).includes("file_not_found")) throw err;
     }
     if (events.length === 0) {
       body.innerHTML = '<div class="sd-section"><div class="sd-section-title">📋 Event Log</div><div class="sd-empty">No events logged yet</div></div>'; return;

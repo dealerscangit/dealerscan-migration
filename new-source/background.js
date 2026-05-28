@@ -4,6 +4,56 @@ const CONFIG_FILE_NAME = "_DealerScan_Config.json";
 const LOG_FILE_NAME    = "_DealerScan_Log.json";
 const EVENTS_FILE_NAME = "_DealerScan_Events.json";
 
+
+// ─────────────────────────────────────────────────────────────
+// Phase 4B.4: Drive proxy helper. Routes all Drive READS through
+// the Apps Script backend so we don't need direct user-by-user
+// folder sharing. Backend gates calls via withAuth_ + allowlist.
+//
+// Endpoint mapping (read-only, set by 4B.2):
+//   proxyListFolders   ?parentId=X         -> {folders: [{id,name,createdAt,modifiedAt}]}
+//   proxyListFiles     ?folderId=X         -> {files: [{id,name,mimeType,size,modifiedAt}]}
+//   proxyReadFile      ?fileId=X           -> {base64, name, mimeType, size}
+//   proxyGetFile       ?fileId=X           -> {name, mimeType, size, createdAt, modifiedAt}
+//   proxyFindFolder    ?parentId=X&name=N  -> {found, folder?:{id,name}}
+//   proxyReadJsonFile  ?fileName=F         -> {parsed:Object, modifiedAt}
+//                                             (system folder only)
+//
+// All proxy calls require ?accessToken=<chrome.identity_token>.
+// Returns:
+//   On success: parsed object with ok:true
+//   On failure: throws Error with backend message
+//
+// WRITE operations (createFolder, renameFolder, deleteFolder, upload)
+// are NOT yet routed through the proxy — they still use direct Drive
+// API. Will be moved in a follow-up commit once write proxy endpoints
+// exist on the backend.
+// ─────────────────────────────────────────────────────────────
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzF13p-WRJloMRBoWiQ4h6EmR7iylkVoGxX0Y9PBpEN0RacIvfxoN_Hd15NJUSYpsQJug/exec";
+
+async function proxyFetch(action, params, token) {
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set("action", action);
+  url.searchParams.set("accessToken", token);
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== null && v !== undefined) url.searchParams.set(k, String(v));
+  }
+  const res = await fetch(url.toString(), { method: "GET" });
+  if (!res.ok) throw new Error(`proxy HTTP ${res.status} (${action})`);
+  const data = await res.json();
+  if (!data.ok) {
+    const msg = data.error || "unknown_proxy_error";
+    // Auth failures throw a distinguishable error so callers can refresh token
+    if (msg === "invalid_access_token" || msg === "missing_access_token") {
+      const e = new Error("proxy_auth_failed: " + msg);
+      e.code = "auth";
+      throw e;
+    }
+    throw new Error(`proxy ${action}: ${msg}`);
+  }
+  return data;
+}
+
 // ── Lifecycle ──
 chrome.runtime.onInstalled.addListener(() => { refreshFolderCache(); initSeenFolders(); pollConfig(); });
 chrome.runtime.onStartup.addListener(() => { refreshFolderCache(); initSeenFolders(); pollConfig(); });
@@ -32,17 +82,14 @@ async function pollConfig() {
   try {
     const token = await getToken();
     if (!token) return;
-    const search = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${SYSTEM_FOLDER_ID}'+in+parents+and+name='${CONFIG_FILE_NAME}'+and+trashed=false&fields=files(id,modifiedTime)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await search.json();
-    if (!data.files || data.files.length === 0) return;
-    const fileId = data.files[0].id;
-    const stored = await getStorage(["dsConfigFileId", "dsConfigModified"]);
-    if (stored.dsConfigFileId === fileId && stored.dsConfigModified === data.files[0].modifiedTime) return;
-    const content = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
-    const config = await content.json();
+    // Single proxy call replaces the previous search + read pattern.
+    // Backend proxyReadJsonFile is scoped to the system folder so we
+    // only pass fileName.
+    const result = await proxyFetch("proxyReadJsonFile", { fileName: CONFIG_FILE_NAME }, token);
+    const config = result.parsed;
+    const modifiedAt = result.modifiedAt;
+    const stored = await getStorage(["dsConfigModified"]);
+    if (stored.dsConfigModified === modifiedAt) return;
 
     // Resolve role from Google email against config lists
     let userEmail = null;
@@ -62,7 +109,7 @@ async function pollConfig() {
       chrome.storage.local.set({ userEmail, resolvedRole });
     }
 
-    chrome.storage.local.set({ dsConfig: config, dsConfigFileId: fileId, dsConfigModified: data.files[0].modifiedTime });
+    chrome.storage.local.set({ dsConfig: config, dsConfigModified: modifiedAt });
     chrome.tabs.query({ url: "https://app.tekioncloud.com/*" }, (tabs) => {
       tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, { action: "configUpdated", config }).catch(() => {}));
     });
@@ -142,12 +189,8 @@ async function initSeenFolders() {
   const token = await getToken();
   if (!token) return;
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)&pageSize=100`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await res.json();
-    chrome.storage.local.set({ seenFolderIds: (data.files || []).map(f => f.id) });
+    const result = await proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token);
+    chrome.storage.local.set({ seenFolderIds: (result.folders || []).map(f => f.id) });
   } catch (e) {}
 }
 
@@ -158,11 +201,10 @@ async function pollForNewFolders() {
     if (userRole !== "manager") return;
     const token = await getToken();
     if (!token) return;
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&orderBy=createdTime+desc&pageSize=100&fields=files(id,name,createdTime)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const allFolders = (await res.json()).files || [];
+    const listResult = await proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token);
+    // Proxy returns {id,name,createdAt,modifiedAt}. Downstream code expects
+    // createdTime (Drives wire name) — alias it for compatibility.
+    const allFolders = (listResult.folders || []).map(f => ({ ...f, createdTime: f.createdAt }));
     const seenIds = seenFolderIds || [];
     const newFolders = allFolders.filter(f => !seenIds.includes(f.id));
     chrome.storage.local.set({ cachedFolders: allFolders });
@@ -170,12 +212,9 @@ async function pollForNewFolders() {
     let notifyCount = 0;
     const nowSeen = [];
     for (const folder of newFolders) {
-      const filesRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${folder.id}'+in+parents+and+trashed=false&fields=files(id)&pageSize=1`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const filesData = await filesRes.json();
-      if (filesData.files && filesData.files.length > 0) { notifyCount++; nowSeen.push(folder.id); }
+      // Check if folder has any files — used to decide whether to notify
+      const filesResult = await proxyFetch("proxyListFiles", { folderId: folder.id }, token);
+      if (filesResult.files && filesResult.files.length > 0) { notifyCount++; nowSeen.push(folder.id); }
     }
     if (nowSeen.length > 0) chrome.storage.local.set({ seenFolderIds: [...seenIds, ...nowSeen] });
     if (notifyCount > 0) {
@@ -190,13 +229,10 @@ async function refreshFolderCache() {
   try {
     const token = await getToken();
     if (!token) return;
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${DRIVE_FOLDER_ID}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&orderBy=createdTime+desc&pageSize=50&fields=files(id,name,createdTime)`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.files) chrome.storage.local.set({ cachedFolders: data.files });
+    const result = await proxyFetch("proxyListFolders", { parentId: DRIVE_FOLDER_ID }, token);
+    // Alias createdAt -> createdTime for downstream compatibility
+    const folders = (result.folders || []).map(f => ({ ...f, createdTime: f.createdAt }));
+    chrome.storage.local.set({ cachedFolders: folders });
   } catch (e) {}
 }
 
