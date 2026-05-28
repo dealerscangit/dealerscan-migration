@@ -1012,35 +1012,53 @@ async function uploadToDrive() {
     const fileObjects = [];
     const nameCounts = {};
 
-    if (newDriveFileIds.length > 0) {
-      // List files via proxy — same shape as before (id, name, mimeType)
-      const filesResult = await proxyFetch("proxyListFiles", { folderId: selectedFolderId }, token);
-      const allDriveFiles = filesResult.files || [];
-      const newDriveFiles = allDriveFiles.filter(f => newDriveFileIds.includes(f.id));
-      const total = newDriveFiles.length + extraFiles.length;
-      for (let i = 0; i < newDriveFiles.length; i++) {
-        const f = newDriveFiles[i];
-        setUploadProgress(i+1, total, Math.round((i/total)*65), f.name);
-        // proxyReadFile returns base64 — convert back to Blob for the
-        // downstream Tekion injection code which expects File/Blob objects.
-        const readResult = await proxyFetch("proxyReadFile", { fileId: f.id }, token);
+    // Reuse the file list already fetched above (checkResult) instead of a
+    // second proxyListFiles round-trip.
+    const newDriveFiles = (checkResult.files || []).filter(f => newDriveFileIds.includes(f.id));
+
+    // Pre-compute dedup names synchronously, in the original order (drive
+    // files first, then extras) so naming stays deterministic even though
+    // the I/O below now runs in parallel.
+    const driveNames = newDriveFiles.map(f => deduplicateName(f.name, nameCounts));
+    const extraNames = extraFiles.map(f => deduplicateName(f.name, nameCounts));
+
+    const total = newDriveFiles.length + extraFiles.length;
+    let done = 0;
+    const bumpProgress = (label) => {
+      done++;
+      setUploadProgress(done, total, Math.round((done / total) * 65), label);
+    };
+
+    // Parallel: pull each Drive file's bytes via proxy. This was a sequential
+    // await-in-loop — the main upload bottleneck. Order preserved via map index.
+    const drivePromises = newDriveFiles.map((f, i) =>
+      proxyFetch("proxyReadFile", { fileId: f.id }, token).then(readResult => {
         const binaryStr = atob(readResult.base64);
         const bytes = new Uint8Array(binaryStr.length);
         for (let b = 0; b < binaryStr.length; b++) bytes[b] = binaryStr.charCodeAt(b);
         const blob = new Blob([bytes], { type: f.mimeType || "image/jpeg" });
         updatePreview(blob, f.mimeType);
-        fileObjects.push(new File([blob], deduplicateName(f.name, nameCounts), { type: f.mimeType || "image/jpeg" }));
-      }
-    }
+        bumpProgress(f.name);
+        return new File([blob], driveNames[i], { type: f.mimeType || "image/jpeg" });
+      })
+    );
 
-    const total2 = fileObjects.length + extraFiles.length;
-    for (let i = 0; i < extraFiles.length; i++) {
-      const f = extraFiles[i];
-      setUploadProgress(fileObjects.length+i+1, total2, Math.round(((fileObjects.length+i)/total2)*65), f.name);
-      updatePreview(f, f.type);
-      await uploadFileToDrive(f, deduplicateName(f.name, nameCounts), selectedFolderId, token);
-      fileObjects.push(new File([f], f.name, { type: f.type }));
-    }
+    // Parallel: upload each extra (dropped) file to Drive. The Drive copy gets
+    // the dedup name; the object injected into Tekion keeps the original name
+    // (matches prior behavior exactly).
+    const extraPromises = extraFiles.map((f, i) =>
+      uploadFileToDrive(f, extraNames[i], selectedFolderId, token).then(() => {
+        updatePreview(f, f.type);
+        bumpProgress(f.name);
+        return new File([f], f.name, { type: f.type });
+      })
+    );
+
+    const [driveResults, extraResults] = await Promise.all([
+      Promise.all(drivePromises),
+      Promise.all(extraPromises)
+    ]);
+    fileObjects.push(...driveResults, ...extraResults);
 
     setUploadProgress(fileObjects.length, fileObjects.length, 80, "Sending to Tekion...");
     const fileDataArray = await Promise.all(fileObjects.map(f => new Promise((res, rej) => {
